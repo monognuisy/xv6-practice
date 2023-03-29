@@ -191,3 +191,6 @@ void            clearpteu(pde_t *pgdir, char *uva);
 
 // prac_syscall.c
 int             myfunction(char*);
+
+// prac2_mycall.c
+void            mycall(void);
