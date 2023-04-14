@@ -7,6 +7,12 @@
 #include "proc.h"
 #include "spinlock.h"
 
+#define QNUM 3
+
+#define QUANTUM(X) (2*(X) + 4)
+#define QNEXT(start, p) ((start) + (((uint)((p) - (start)) + 1) % NPROC))
+
+
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
@@ -19,6 +25,53 @@ extern void forkret(void);
 extern void trapret(void);
 
 static void wakeup1(void *chan);
+
+// Defining queues
+struct queue queues[] = {
+  [L0] = {ptable.proc, ptable.proc + 1},
+  [L1] = {ptable.proc, ptable.proc + 1},
+  [L2] = {ptable.proc, ptable.proc + 1},
+};
+
+/** Defining queue functions */
+
+// Check whether queue is empty
+int 
+isempty_queue(enum qpriority level) {
+  return (queues[level].front == queues[level].back);
+}
+
+// Push process p into queue q 
+void 
+push_queue(struct proc *p, enum qpriority level) {
+  struct proc *curr;
+  
+  for (curr = queues[level].back; curr < &ptable.proc[NPROC]; curr++) {
+    if (curr->state == UNUSED) {
+      curr = p;
+    }
+  }
+}
+
+// Get first element of queue (L0, L1, L2)
+struct proc*
+firstproc(enum qpriority level) {
+  struct proc *p;
+  for (p = queues[level].back; p < &ptable.proc[NPROC]; p++) {
+    if (p->state == RUNNING && p->queue == level) 
+      goto ret;
+  }
+
+  for (p = ptable.proc; p < queues[level].back; p++) {
+    if (p->state == RUNNING && p->queue == level) 
+      goto ret;
+  }
+
+ret:
+  queues[level].front = p;
+  return p;
+}
+
 
 void
 pinit(void)
@@ -112,6 +165,12 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
+  // Set time QUANTUM of new process to 0
+  p->localtime = 0;
+
+  // Set queue of new process to L0
+  p->queue = L0;
+
   return p;
 }
 
@@ -149,6 +208,8 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
+  // set back of L0 queue
+  queues[L0].back = QNEXT(ptable.proc, p);
 
   release(&ptable.lock);
 }
@@ -215,6 +276,8 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
+  // set back of L0 queue
+  queues[L0].back = QNEXT(ptable.proc, np);
 
   release(&ptable.lock);
 
@@ -325,11 +388,26 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
+
+
+  
   
   for(;;){
     // Enable interrupts on this processor.
     sti();
 
+L0sched:
+    // L0 Scheduling
+    p = firstproc(L0);
+    if (isempty_queue(L0)) goto L1sched;
+
+    for (; p != queues[L0].back; p = QNEXT(ptable.proc, p)) {
+      // TODO: L0 scheduling body
+    }
+
+
+L1sched:
+    // Round Robin
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
