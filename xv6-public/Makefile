@@ -185,6 +185,7 @@ UPROGS=\
 	_zombie\
 	_my_userapp\
 	_prac2_usercall\
+	# _mlfq_test\
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)
