@@ -90,3 +90,45 @@ sys_uptime(void)
   return xticks;
 }
 
+void
+sys_schedulerLock(void)
+{
+  int password;
+  
+  if (argint(0, &password) < 0)
+    return;
+  
+  schedulerLock(password);
+}
+
+void
+sys_schedulerUnlock(void)
+{
+  int password;
+  
+  if (argint(0, &password) < 0)
+    return;
+  
+  schedulerUnlock(password);
+}
+
+int
+sys_getLevel(void)
+{
+  return getLevel();
+}
+
+void
+sys_setPriority(void)
+{
+  int pid;
+  int priority;
+
+  if (argint(0, &pid) < 0)
+    return;
+  
+  if (argint(1, &priority) < 0)
+    return;
+
+  setPriority(pid, priority);
+}

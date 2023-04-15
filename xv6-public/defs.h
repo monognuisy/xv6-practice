@@ -124,6 +124,10 @@ void            yield(void);
 void            demote(struct proc*);
 void            elapse(void);
 void            boost(void);
+void            schedulerLock(int);
+void            schedulerUnlock(int);
+void            setPriority(int, int);
+int             getLevel(void);
 
 
 // swtch.S
