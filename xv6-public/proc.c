@@ -9,6 +9,7 @@
 
 #define QUANTUM(X) (2*(X) + 4)
 #define QNEXT(start, p) ((start) + (((uint)((p) - (start)) + 1) % NPROC))
+#define QPREV(start, p) ((start) + (((uint)((p) - (start)) - 1) % NPROC))
 
 
 struct {
@@ -30,6 +31,8 @@ struct queue queues[] = {
   [L1] = {ptable.proc, ptable.proc},
   [L2] = {ptable.proc, ptable.proc},
 };
+
+static struct proc *specialproc;
 
 /** Defining queue functions */
 
@@ -463,6 +466,21 @@ scheduler(void)
     sti();
 
     acquire(&ptable.lock);
+
+    if (!specialproc) goto L0sched;
+SPECIALsched:
+    p = specialproc;
+    while (specialproc && (p->state == RUNNABLE || p->state == RUNNING)) {
+      c->proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
+
+      swtch(&(c->scheduler), p->context);
+      switchkvm();
+
+      c->proc = 0;
+    }
+
 L0sched:
     // L0 Scheduling - Round Robin
     p = firstproc(L0);
@@ -470,7 +488,9 @@ L0sched:
 
     for (; p != queues[L0].back; p = QNEXT(ptable.proc, p)) {
       // TODO: L0 scheduling body
-      if(p->state != RUNNABLE || p->queue != L0)
+      if (specialproc) goto SPECIALsched;
+
+      if (p->state != RUNNABLE || p->queue != L0)
         continue;
       
       // queues[L0].front = p;
@@ -494,6 +514,8 @@ L1sched:
 
     for (; p != queues[L1].back; p = QNEXT(ptable.proc, p)) {
       // TODO: L1 scheduling body
+
+      if (specialproc) goto SPECIALsched;
 
       // Check if new L0 process exists
       if (!isempty_queue(L0)) goto L0sched;
@@ -524,6 +546,7 @@ L2sched:
       for (; p != queues[L2].back; p = QNEXT(ptable.proc, p)) {
         // TODO: L2 scheduling body
 
+        if (specialproc) goto SPECIALsched;
         if (!isempty_queue(L0)) goto L0sched;
         if (!isempty_queue(L1)) goto L1sched;
 
@@ -760,4 +783,66 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+void 
+schedulerLock(int password)
+{
+  struct proc *p = myproc();
+
+  if (!p) return;
+  if (password != 2021031685) {
+    kill(p->pid);
+    cprintf("[killed] pid: %d, time quantum: %d, level: %d\n",
+             p->pid, p->localtime, p->queue);
+    return;
+  }
+  if (specialproc) {
+    kill(p->pid);
+    cprintf("[killed] pid: %d, time quantum: %d, level: %d\n",
+             p->pid, p->localtime, p->queue);
+    return;
+  }
+
+  ticks = 0;
+  p->queue = SPECIAL;
+  specialproc = p;
+}
+
+void
+schedulerUnlock(int password)
+{
+  struct proc *p = myproc();
+
+  if (!p) return;
+  if (password != 2021031685) {
+    kill(p->pid);
+    cprintf("[killed] pid: %d, time quantum: %d, level: %d\n",
+             p->pid, p->localtime, p->queue);
+    return;
+  }
+  if (p->queue != SPECIAL) {
+    kill(p->pid);
+    cprintf("[killed] pid: %d, time quantum: %d, level: %d\n",
+             p->pid, p->localtime, p->queue);
+    return;
+  }
+
+  p->queue = L0;
+  p->priority = 3;
+  queues[L0].front = p;
+  
+}
+
+int
+getLevel(void)
+{
+  return 0;
+  //
+}
+
+void
+setPriority(int pid, int priority)
+{
+  //
 }
