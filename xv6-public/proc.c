@@ -210,7 +210,7 @@ userinit(void)
   }
   // set back of L0 queue
   queues[L0].back = QNEXT(ptable.proc, p);
-  queues[L0].prnums[p->priority]++;
+  queues[L0].prnums[p->priority]++; 
 
   release(&ptable.lock);
 }
@@ -412,8 +412,15 @@ demote(struct proc *p) {
 void
 elapse(void) {
   acquire(&ptable.lock);
+
+
   struct proc *p = myproc();
-  
+
+  if (!p) {
+    release(&ptable.lock);
+    return;
+  } 
+
   p->localtime++;
 
   if (p->localtime >= QUANTUM(p->queue))
@@ -514,7 +521,6 @@ L2sched:
     for (pr = 0; pr <= 3; pr++) {
       if (queues[L2].prnums[pr] == 0) continue;
 
-prcheck:
       for (; p != queues[L2].back; p = QNEXT(ptable.proc, p)) {
         // TODO: L2 scheduling body
 
