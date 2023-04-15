@@ -790,6 +790,8 @@ schedulerLock(int password)
 {
   struct proc *p = myproc();
 
+  acquire(&ptable.lock);
+
   if (!p) return;
   if (password != 2021031685) {
     kill(p->pid);
@@ -807,6 +809,8 @@ schedulerLock(int password)
   ticks = 0;
   p->queue = SPECIAL;
   specialproc = p;
+
+  release(&ptable.lock);
 }
 
 void
@@ -814,35 +818,56 @@ schedulerUnlock(int password)
 {
   struct proc *p = myproc();
 
-  if (!p) return;
+  acquire(&ptable.lock);
+  if (!p) {
+    release(&ptable.lock);
+    return;
+  }
   if (password != 2021031685) {
     kill(p->pid);
     cprintf("[killed] pid: %d, time quantum: %d, level: %d\n",
              p->pid, p->localtime, p->queue);
+
+    release(&ptable.lock);
     return;
   }
   if (p->queue != SPECIAL) {
     kill(p->pid);
     cprintf("[killed] pid: %d, time quantum: %d, level: %d\n",
              p->pid, p->localtime, p->queue);
+
+    release(&ptable.lock);
     return;
   }
 
   p->queue = L0;
   p->priority = 3;
   queues[L0].front = p;
+
+  release(&ptable.lock);
   
 }
 
 int
 getLevel(void)
 {
-  return 0;
-  //
+  struct proc *p = myproc();
+  if (!p) return -1;
+  return p->queue;
 }
 
 void
 setPriority(int pid, int priority)
 {
-  //
+  struct proc *p;
+
+  acquire(&ptable.lock);
+  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if (p->pid == pid) {
+      p->priority = priority;
+      break;
+    }
+  }
+
+  release(&ptable.lock);
 }
