@@ -51,13 +51,16 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
   enum qpriority queue;        // Queue priority
-  uint localtime;              // Process time elapsed
+  int priority;                // Priority in L2 queue
+  uint localtime;              // Elapsed time of process
 };
 
+#define QNUM 3
+
 struct queue {
-  struct proc *front;
-  struct proc *back; 
-  // struct proc queue[NPROC];
+  struct proc *front;          // Front of queue
+  struct proc *back;           // Back of queue
+  int prnums[4];               // Number of process with priority
 };
 
 // Process memory is laid out contiguously, low addresses first:

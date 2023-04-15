@@ -120,6 +120,11 @@ void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
 void            yield(void);
+// custom
+void            demote(struct proc*);
+void            elapse(void);
+void            boost(void);
+
 
 // swtch.S
 void            swtch(struct context**, struct context*);

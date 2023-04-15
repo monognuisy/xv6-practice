@@ -7,8 +7,6 @@
 #include "proc.h"
 #include "spinlock.h"
 
-#define QNUM 3
-
 #define QUANTUM(X) (2*(X) + 4)
 #define QNEXT(start, p) ((start) + (((uint)((p) - (start)) + 1) % NPROC))
 
@@ -28,9 +26,9 @@ static void wakeup1(void *chan);
 
 // Defining queues
 struct queue queues[] = {
-  [L0] = {ptable.proc, ptable.proc + 1},
-  [L1] = {ptable.proc, ptable.proc + 1},
-  [L2] = {ptable.proc, ptable.proc + 1},
+  [L0] = {ptable.proc, ptable.proc},
+  [L1] = {ptable.proc, ptable.proc},
+  [L2] = {ptable.proc, ptable.proc},
 };
 
 /** Defining queue functions */
@@ -57,17 +55,12 @@ push_queue(struct proc *p, enum qpriority level) {
 struct proc*
 firstproc(enum qpriority level) {
   struct proc *p;
-  for (p = queues[level].back; p < &ptable.proc[NPROC]; p++) {
-    if (p->state == RUNNING && p->queue == level) 
-      goto ret;
+
+  for (p = queues[level].front; p != queues[level].back; p = QNEXT(ptable.proc, p)) {
+    if (p->state == RUNNABLE && p->queue == level)
+      break;
   }
 
-  for (p = ptable.proc; p < queues[level].back; p++) {
-    if (p->state == RUNNING && p->queue == level) 
-      goto ret;
-  }
-
-ret:
   queues[level].front = p;
   return p;
 }
@@ -130,10 +123,14 @@ allocproc(void)
   char *sp;
 
   acquire(&ptable.lock);
+  p = queues[L0].back;
 
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == UNUSED)
+  do {
+    if (p->state == UNUSED)
       goto found;
+    
+    p = QNEXT(ptable.proc, p);
+  } while (p != queues[L0].back);
 
   release(&ptable.lock);
   return 0;
@@ -165,10 +162,9 @@ found:
   memset(p->context, 0, sizeof *p->context);
   p->context->eip = (uint)forkret;
 
-  // Set time QUANTUM of new process to 0
+  // init process fields
   p->localtime = 0;
-
-  // Set queue of new process to L0
+  p->priority = 3;
   p->queue = L0;
 
   return p;
@@ -208,8 +204,13 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
+  // set the very first process to front
+  if (isempty_queue(L0)) {
+    queues[L0].front = p;
+  }
   // set back of L0 queue
   queues[L0].back = QNEXT(ptable.proc, p);
+  queues[L0].prnums[p->priority]++;
 
   release(&ptable.lock);
 }
@@ -276,8 +277,13 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
-  // set back of L0 queue
+  // set the very first process to front
+  if (isempty_queue(L0)) {
+    queues[L0].front = np;
+  }
+  // set every process + 1 to back 
   queues[L0].back = QNEXT(ptable.proc, np);
+  queues[L0].prnums[np->priority]++;
 
   release(&ptable.lock);
 
@@ -326,6 +332,9 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
+
+  // Decrease number with priority of current process 
+  queues[curproc->queue].prnums[curproc->priority]--;
   sched();
   panic("zombie exit");
 }
@@ -374,6 +383,59 @@ wait(void)
   }
 }
 
+void
+demote(struct proc *p) {
+  p->localtime = 0;
+
+  if (p->queue == L2) {
+
+    queues[L2].prnums[p->priority]--;
+    p->priority--;
+    
+    if (p->priority < 0) 
+      p->priority = 0;
+
+    queues[L2].prnums[p->priority]++;
+    return;
+  }
+
+  // p->queue will be either L1 or L2
+  p->queue++;
+  
+  if (isempty_queue(p->queue))
+    queues[p->queue].front = p;
+
+  queues[p->queue].back = QNEXT(ptable.proc, p);
+}
+
+// Elapse localtime at timer interrupt.
+void
+elapse(void) {
+  acquire(&ptable.lock);
+  struct proc *p = myproc();
+  
+  p->localtime++;
+
+  if (p->localtime >= QUANTUM(p->queue))
+    demote(p);
+
+  release(&ptable.lock);
+}
+
+// Boost foreach 100 ticks.
+void
+boost(void) {
+  struct proc *p;
+
+  acquire(&ptable.lock);
+  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    p->queue = L0;
+    p->localtime = 0;
+    p->priority = 3;
+  }
+  release(&ptable.lock);
+}
+
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -388,28 +450,109 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
-
-
-  
   
   for(;;){
     // Enable interrupts on this processor.
     sti();
 
+    acquire(&ptable.lock);
 L0sched:
-    // L0 Scheduling
+    // L0 Scheduling - Round Robin
     p = firstproc(L0);
     if (isempty_queue(L0)) goto L1sched;
 
     for (; p != queues[L0].back; p = QNEXT(ptable.proc, p)) {
       // TODO: L0 scheduling body
+      if(p->state != RUNNABLE || p->queue != L0)
+        continue;
+      
+      // queues[L0].front = p;
+      c->proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
+
+      swtch(&(c->scheduler), p->context);
+      switchkvm(); 
+
+      // Process is done running for now.
+      // It should have changed its p->state before coming back.
+      c->proc = 0;
     }
 
 
 L1sched:
-    // Round Robin
+    // L1 Scheduling - Round Robin
+    p = firstproc(L1);
+    if (isempty_queue(L1)) goto L2sched;
+
+    for (; p != queues[L1].back; p = QNEXT(ptable.proc, p)) {
+      // TODO: L1 scheduling body
+
+      // Check if new L0 process exists
+      if (!isempty_queue(L0)) goto L0sched;
+
+      if(p->state != RUNNABLE || p->queue != L1)
+        continue;
+      
+      // queues[L1].front = p;
+      c->proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
+
+      swtch(&(c->scheduler), p->context);
+      switchkvm(); 
+
+      // Process is done running for now.
+      // It should have changed its p->state before coming back.
+      c->proc = 0;
+    }
+
+L2sched:
+    p = firstproc(L2);
+    int pr;             // priority
+
+    for (pr = 0; pr <= 3; pr++) {
+      if (queues[L2].prnums[pr] == 0) continue;
+
+prcheck:
+      for (; p != queues[L2].back; p = QNEXT(ptable.proc, p)) {
+        // TODO: L2 scheduling body
+
+        if (!isempty_queue(L0)) goto L0sched;
+        if (!isempty_queue(L1)) goto L1sched;
+
+        // Check if there're any processes w/ higher priority
+        // And set pr with new higher priority
+        for (int temppr = 0; temppr < pr; temppr++) {
+          if (queues[L2].prnums[temppr] != 0) {
+            pr = temppr;
+            break;
+          }
+        }
+
+        if (p->priority != pr) continue;
+
+        // found! -> FCFS (non-preemptive)
+        while (p->state == RUNNABLE || p->state == RUNNING) {
+          // demote(L2) occured
+          if (p->priority > pr) break;
+
+          c->proc = p;
+          switchuvm(p);
+          p->state = RUNNING;
+
+          swtch(&(c->scheduler), p->context);
+          switchkvm();
+
+          // Process is done running for now.
+          // It should have changed its p->state before coming back.
+          c->proc = 0;
+        }
+      }
+    } 
+
+
     // Loop over process table looking for process to run.
-    acquire(&ptable.lock);
     for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
       if(p->state != RUNNABLE)
         continue;
@@ -428,8 +571,10 @@ L1sched:
       // It should have changed its p->state before coming back.
       c->proc = 0;
     }
-    release(&ptable.lock);
 
+
+
+    release(&ptable.lock);
   }
 }
 
