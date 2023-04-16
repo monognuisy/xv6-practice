@@ -36,12 +36,13 @@ int fork_children2()
     }
     else
     {
-      int r = setpriority(p, i);
-      if (r < 0)
-      {
-        printf(1, "setpriority returned %d\n", r);
-        exit();
-      }
+      setPriority(p, i);
+      // int r = setPriority(p, i);
+      // if (r < 0)
+      // {
+      //   printf(1, "setPriority returned %d\n", r);
+      //   exit();
+      // }
     }
   }
   return parent;
@@ -87,7 +88,8 @@ int main(int argc, char *argv[])
   {
     for (i = 0; i < NUM_LOOP; i++)
     {
-      int x = getlev();
+      // int x = 1;
+      int x = getLevel();
       if (x < 0 || x > 4)
       {
         printf(1, "Wrong level: %d\n", x);
