@@ -67,10 +67,18 @@ firstproc(enum qpriority level) {
   }
 
   // if nothing found -> find one more time
-  for (p = ptable.proc; p != queues[level].back; p++) {
+  p = queues[level].back;
+  do {
     if (p->state == RUNNABLE && p->queue == level)
       goto found;
-  }
+    
+    p = QNEXT(ptable.proc, p);
+  } while (p != queues[level].back);
+
+  // for (p = ptable.proc; p != queues[level].back; p++) {
+  //   if (p->state == RUNNABLE && p->queue == level)
+  //     goto found;
+  // }
 
 found:
   queues[level].front = p;
