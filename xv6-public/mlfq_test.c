@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
   printf(1, "MLFQ test start\n");
 
   printf(1, "[Test 1] default\n");
-  pid = fork_children();
+  pid = fork_children2();
 
   if (pid != parent)
   {

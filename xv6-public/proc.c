@@ -19,6 +19,8 @@ struct {
 
 static struct proc *initproc;
 
+// int prnums[4];
+
 int nextpid = 1;
 extern void forkret(void);
 extern void trapret(void);
@@ -61,9 +63,16 @@ firstproc(enum qpriority level) {
 
   for (p = queues[level].front; p != queues[level].back; p = QNEXT(ptable.proc, p)) {
     if (p->state == RUNNABLE && p->queue == level)
-      break;
+      goto found;
   }
 
+  // if nothing found -> find one more time
+  for (p = ptable.proc; p != queues[level].back; p++) {
+    if (p->state == RUNNABLE && p->queue == level)
+      goto found;
+  }
+
+found:
   queues[level].front = p;
   return p;
 }
@@ -207,6 +216,7 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
+
   // set the very first process to front
   if (isempty_queue(L0)) {
     queues[L0].front = p;
@@ -214,6 +224,9 @@ userinit(void)
   // set back of L0 queue
   queues[L0].back = QNEXT(ptable.proc, p);
   queues[L0].prnums[p->priority]++; 
+  // prnums[p->priority]++;
+
+  queues[L0].nums++;
 
   release(&ptable.lock);
 }
@@ -287,6 +300,7 @@ fork(void)
   // set every process + 1 to back 
   queues[L0].back = QNEXT(ptable.proc, np);
   queues[L0].prnums[np->priority]++;
+  // prnums[np->priority]++;
 
   release(&ptable.lock);
 
@@ -335,9 +349,11 @@ exit(void)
 
   // Jump into the scheduler, never to return.
   curproc->state = ZOMBIE;
+  // queues[p->queue].nums--;
 
   // Decrease number with priority of current process 
   queues[curproc->queue].prnums[curproc->priority]--;
+  // prnums[curproc->priority]--;
   sched();
   panic("zombie exit");
 }
@@ -390,21 +406,32 @@ void
 demote(struct proc *p) {
   p->localtime = 0;
 
+  if (p->pid <= 2) return;
+
   if (p->queue == L2) {
 
     queues[L2].prnums[p->priority]--;
+    // prnums[p->priority]--;
     p->priority--;
     
     if (p->priority < 0) 
       p->priority = 0;
 
     queues[L2].prnums[p->priority]++;
+    // prnums[p->priority]++;
     return;
   }
 
+
   // p->queue will be either L1 or L2
   p->queue++;
+
+  // cprintf("demotion! pid: %d, level: %d", p->pid, p->queue);
   
+  if (p->queue == L2) {
+    queues[L2].prnums[p->priority]++;
+  }
+
   if (isempty_queue(p->queue))
     queues[p->queue].front = p;
 
@@ -438,11 +465,20 @@ boost(void) {
   struct proc *p;
 
   acquire(&ptable.lock);
+  specialproc = 0;
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if (p->queue == SPECIAL)
+      queues[L0].front = p;
+
     p->queue = L0;
     p->localtime = 0;
     p->priority = 3;
   }
+  
+  for (int pr = 0; pr <= 3; pr++) {
+    queues[L0].prnums[pr] = 0;
+  }
+  // prnums[3] = NPROC;
   release(&ptable.lock);
 }
 
@@ -458,6 +494,7 @@ void
 scheduler(void)
 {
   struct proc *p;
+  struct proc *fcfsp;
   struct cpu *c = mycpu();
   c->proc = 0;
   
@@ -468,7 +505,7 @@ scheduler(void)
     acquire(&ptable.lock);
 
     if (!specialproc) goto L0sched;
-SPECIALsched:
+// SPECIALsched:
     p = specialproc;
     while (specialproc && (p->state == RUNNABLE || p->state == RUNNING)) {
       c->proc = p;
@@ -482,127 +519,123 @@ SPECIALsched:
     }
 
 L0sched:
-    // L0 Scheduling - Round Robin
     p = firstproc(L0);
-    if (isempty_queue(L0)) goto L1sched;
-
-    for (; p != queues[L0].back; p = QNEXT(ptable.proc, p)) {
-      // TODO: L0 scheduling body
-      if (specialproc) goto SPECIALsched;
-
-      if (p->state != RUNNABLE || p->queue != L0)
+    for (p = queues[L0].front; p != queues[L0].back; p = QNEXT(ptable.proc, p)) {
+      if(p->state != RUNNABLE || p->queue != L0)
         continue;
-      
-      // queues[L0].front = p;
+
       c->proc = p;
       switchuvm(p);
       p->state = RUNNING;
-
-      swtch(&(c->scheduler), p->context);
-      switchkvm(); 
-
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      c->proc = 0;
-    }
-
-
-L1sched:
-    // L1 Scheduling - Round Robin
-    p = firstproc(L1);
-    if (isempty_queue(L1)) goto L2sched;
-
-    for (; p != queues[L1].back; p = QNEXT(ptable.proc, p)) {
-      // TODO: L1 scheduling body
-
-      if (specialproc) goto SPECIALsched;
-
-      // Check if new L0 process exists
-      if (!isempty_queue(L0)) goto L0sched;
-
-      if(p->state != RUNNABLE || p->queue != L1)
-        continue;
-      
-      // queues[L1].front = p;
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
-
-      swtch(&(c->scheduler), p->context);
-      switchkvm(); 
-
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
-      c->proc = 0;
-    }
-
-L2sched:
-    p = firstproc(L2);
-    int pr;             // priority
-
-    for (pr = 0; pr <= 3; pr++) {
-      if (queues[L2].prnums[pr] == 0) continue;
-
-      for (; p != queues[L2].back; p = QNEXT(ptable.proc, p)) {
-        // TODO: L2 scheduling body
-
-        if (specialproc) goto SPECIALsched;
-        if (!isempty_queue(L0)) goto L0sched;
-        if (!isempty_queue(L1)) goto L1sched;
-
-        // Check if there're any processes w/ higher priority
-        // And set pr with new higher priority
-        for (int temppr = 0; temppr < pr; temppr++) {
-          if (queues[L2].prnums[temppr] != 0) {
-            pr = temppr;
-            break;
-          }
-        }
-
-        if (p->priority != pr) continue;
-
-        // found! -> FCFS (non-preemptive)
-        while (p->state == RUNNABLE || p->state == RUNNING) {
-          // demote(L2) occured
-          if (p->priority > pr) break;
-
-          c->proc = p;
-          switchuvm(p);
-          p->state = RUNNING;
-
-          swtch(&(c->scheduler), p->context);
-          switchkvm();
-
-          // Process is done running for now.
-          // It should have changed its p->state before coming back.
-          c->proc = 0;
-        }
-      }
-    } 
-
-
-    // Loop over process table looking for process to run.
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
-
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
+      queues[p->queue].nums--;
 
       swtch(&(c->scheduler), p->context);
       switchkvm();
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
+      c->proc = 0;
+    }
+
+    if (!isempty_queue(L0)) goto L0sched;
+
+L1sched:
+    p = firstproc(L1);
+
+    for (p = queues[L1].front; p != queues[L1].back; p = QNEXT(ptable.proc, p)) {
+      if (p->state != RUNNABLE || p->queue != L1)
+        continue;
+      
+      // L0 process came while scheduling L1 queue
+      if (!isempty_queue(L0)) goto L0sched;
+
+      c->proc = p;
+      switchuvm(p);
+      p->state = RUNNING;
+      queues[p->queue].nums--;
+
+      swtch(&(c->scheduler), p->context);
+      switchkvm();
+
       c->proc = 0;
     }
 
 
+    if (!isempty_queue(L1)) goto L1sched;
 
+// L2sched:
+    fcfsp = p = firstproc(L2);
+
+    // cprintf("empty?: %d\n", isempty_queue(L2));
+
+    if (isempty_queue(L2)) {
+      goto schedend;
+    }
+
+    // find L2 process w/ the lowest priority
+    for (p = queues[L2].front; p != queues[L2].back; p = QNEXT(ptable.proc, p)) {
+      if (p->state != RUNNABLE || p->queue != L2) continue;
+
+      if (!isempty_queue(L0)) goto L0sched;
+      if (!isempty_queue(L1)) goto L1sched;
+
+      if (fcfsp->priority > p->priority) {
+        fcfsp = p;
+      }
+    }
+
+    c->proc = fcfsp;
+    switchuvm(fcfsp);
+    fcfsp->state = RUNNING;
+    queues[fcfsp->queue].nums--;
+
+    swtch(&(c->scheduler), fcfsp->context);
+    switchkvm();
+
+    c->proc = 0;
+
+    // goto L2sched;
+
+
+    // int pr;
+    // for (pr = 0; pr <= 3; pr++) {
+
+
+    //   p = firstproc(L2);
+    //   for (p = queues[L2].front; p != queues[L2].back; p = QNEXT(ptable.proc, p)) {
+
+    //     // Check if there're any processes w/ higher priority
+    //     // And set pr with new higher priority
+    //     for (int temppr = 0; temppr < pr; temppr++) {
+    //       if (queues[L2].prnums[temppr] != 0) {
+    //         cprintf("new! before: %d, after: %d\n", pr, temppr);
+    //         pr = temppr;
+    //         break;
+    //       }
+    //     }
+
+    //     if (!isempty_queue(L0)) goto L0sched;
+    //     if (!isempty_queue(L1)) goto L1sched;
+
+    //     if (p->state != RUNNABLE || p->queue != L2 || p->priority != pr) continue;
+
+    //     // found! -> FCFS (non-preemptive)
+    //     while (p->state == RUNNABLE) {
+    //       // demote(L2) occured
+    //       if (p->priority > pr) break;
+
+    //       c->proc = p;
+    //       switchuvm(p);
+    //       p->state = RUNNING;
+    //       queues[p->queue].nums--;
+
+    //       swtch(&(c->scheduler), p->context);
+    //       switchkvm();
+
+    //       c->proc = 0;
+    //     }
+    //   }
+    // } 
+
+schedend:
     release(&ptable.lock);
   }
 }
@@ -637,11 +670,18 @@ sched(void)
 void
 yield(void)
 {
+  struct proc *p;
   acquire(&ptable.lock);  //DOC: yieldlock
-  myproc()->state = RUNNABLE;
+  // cprintf("inside yield: %d\n", myproc()->pid);
+  p = myproc();
+  p->state = RUNNABLE;
+  queues[p->queue].nums++;
   sched();
   release(&ptable.lock);
 }
+
+// Pass to next process in L2(FCFS) scheduler
+// only called inside yield()
 
 // A fork child's very first scheduling by scheduler()
 // will swtch here.  "Return" to user space.
@@ -690,6 +730,7 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
+  // queues[p->queue].nums--;
 
   sched();
 
@@ -711,9 +752,20 @@ wakeup1(void *chan)
 {
   struct proc *p;
 
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+  // int flag = 0;
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if(p->state == SLEEPING && p->chan == chan) {
       p->state = RUNNABLE;
+      queues[p->queue].nums++;
+      // flag |= (1 << p->queue);
+    }
+  }
+
+  // for (int level = L0; level < QNUM; level++) {
+  //   if ((flag >> level) & 1)
+  //     p = firstproc(level);
+  // }
 }
 
 // Wake up all processes sleeping on chan.
@@ -738,8 +790,10 @@ kill(int pid)
     if(p->pid == pid){
       p->killed = 1;
       // Wake process from sleep if necessary.
-      if(p->state == SLEEPING)
+      if(p->state == SLEEPING) {
         p->state = RUNNABLE;
+        queues[p->queue].nums++;
+      }
       release(&ptable.lock);
       return 0;
     }
@@ -840,6 +894,7 @@ schedulerUnlock(int password)
     return;
   }
 
+  p->localtime = 0;
   p->queue = L0;
   p->priority = 3;
   queues[L0].front = p;
