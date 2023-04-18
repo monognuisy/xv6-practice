@@ -75,11 +75,6 @@ firstproc(enum qpriority level) {
     p = QNEXT(ptable.proc, p);
   } while (p != queues[level].back);
 
-  // for (p = ptable.proc; p != queues[level].back; p++) {
-  //   if (p->state == RUNNABLE && p->queue == level)
-  //     goto found;
-  // }
-
 found:
   queues[level].front = p;
   return p;
@@ -513,7 +508,7 @@ scheduler(void)
     acquire(&ptable.lock);
 
     if (!specialproc) goto L0sched;
-// SPECIALsched:
+SPECIALsched:
     p = specialproc;
     while (specialproc && (p->state == RUNNABLE || p->state == RUNNING)) {
       c->proc = p;
@@ -526,11 +521,15 @@ scheduler(void)
       c->proc = 0;
     }
 
+    if (specialproc) goto schedend;
+
 L0sched:
     p = firstproc(L0);
     for (p = queues[L0].front; p != queues[L0].back; p = QNEXT(ptable.proc, p)) {
       if(p->state != RUNNABLE || p->queue != L0)
         continue;
+
+      if (specialproc) goto SPECIALsched;
 
       c->proc = p;
       switchuvm(p);
@@ -552,6 +551,7 @@ L1sched:
       if (p->state != RUNNABLE || p->queue != L1)
         continue;
       
+      if (specialproc) goto SPECIALsched;
       // L0 process came while scheduling L1 queue
       if (!isempty_queue(L0)) goto L0sched;
 
@@ -572,8 +572,6 @@ L1sched:
 // L2sched:
     fcfsp = p = firstproc(L2);
 
-    // cprintf("empty?: %d\n", isempty_queue(L2));
-
     if (isempty_queue(L2)) {
       goto schedend;
     }
@@ -582,6 +580,7 @@ L1sched:
     for (p = queues[L2].front; p != queues[L2].back; p = QNEXT(ptable.proc, p)) {
       if (p->state != RUNNABLE || p->queue != L2) continue;
 
+      if (specialproc) goto SPECIALsched;
       if (!isempty_queue(L0)) goto L0sched;
       if (!isempty_queue(L1)) goto L1sched;
 
@@ -599,49 +598,6 @@ L1sched:
     switchkvm();
 
     c->proc = 0;
-
-    // goto L2sched;
-
-
-    // int pr;
-    // for (pr = 0; pr <= 3; pr++) {
-
-
-    //   p = firstproc(L2);
-    //   for (p = queues[L2].front; p != queues[L2].back; p = QNEXT(ptable.proc, p)) {
-
-    //     // Check if there're any processes w/ higher priority
-    //     // And set pr with new higher priority
-    //     for (int temppr = 0; temppr < pr; temppr++) {
-    //       if (queues[L2].prnums[temppr] != 0) {
-    //         cprintf("new! before: %d, after: %d\n", pr, temppr);
-    //         pr = temppr;
-    //         break;
-    //       }
-    //     }
-
-    //     if (!isempty_queue(L0)) goto L0sched;
-    //     if (!isempty_queue(L1)) goto L1sched;
-
-    //     if (p->state != RUNNABLE || p->queue != L2 || p->priority != pr) continue;
-
-    //     // found! -> FCFS (non-preemptive)
-    //     while (p->state == RUNNABLE) {
-    //       // demote(L2) occured
-    //       if (p->priority > pr) break;
-
-    //       c->proc = p;
-    //       switchuvm(p);
-    //       p->state = RUNNING;
-    //       queues[p->queue].nums--;
-
-    //       swtch(&(c->scheduler), p->context);
-    //       switchkvm();
-
-    //       c->proc = 0;
-    //     }
-    //   }
-    // } 
 
 schedend:
     release(&ptable.lock);
@@ -854,17 +810,22 @@ schedulerLock(int password)
 
   acquire(&ptable.lock);
 
-  if (!p) return;
+  if (!p) {
+    return;
+  }
   if (password != 2021031685) {
-    kill(p->pid);
+    release(&ptable.lock);
     cprintf("[killed] pid: %d, time quantum: %d, level: %d\n",
              p->pid, p->localtime, p->queue);
+    kill(p->pid);
+    // exit();
     return;
   }
   if (specialproc) {
-    kill(p->pid);
+    release(&ptable.lock);
     cprintf("[killed] pid: %d, time quantum: %d, level: %d\n",
              p->pid, p->localtime, p->queue);
+    kill(p->pid);
     return;
   }
 
@@ -886,29 +847,33 @@ schedulerUnlock(int password)
     return;
   }
   if (password != 2021031685) {
-    kill(p->pid);
+    release(&ptable.lock);
     cprintf("[killed] pid: %d, time quantum: %d, level: %d\n",
              p->pid, p->localtime, p->queue);
 
-    release(&ptable.lock);
+    kill(p->pid);
     return;
   }
   if (p->queue != SPECIAL) {
-    kill(p->pid);
+    release(&ptable.lock);
     cprintf("[killed] pid: %d, time quantum: %d, level: %d\n",
              p->pid, p->localtime, p->queue);
+    kill(p->pid);
 
-    release(&ptable.lock);
     return;
   }
+
+  specialproc = 0;
 
   p->localtime = 0;
   p->queue = L0;
   p->priority = 3;
   queues[L0].front = p;
 
+  if (isempty_queue(L0))
+    queues[L0].back = QNEXT(ptable.proc, p);
+
   release(&ptable.lock);
-  
 }
 
 int

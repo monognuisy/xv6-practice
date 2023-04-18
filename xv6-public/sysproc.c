@@ -134,6 +134,9 @@ sys_setPriority(void)
   if (argint(1, &priority) < 0)
     return -1;
 
+  if (priority < 0 || priority > 3) 
+    return -1;
+
   setPriority(pid, priority);
 
   return 0;
