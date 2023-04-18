@@ -60,8 +60,6 @@ struct proc {
 struct queue {
   struct proc *front;          // Front of queue
   struct proc *back;           // Back of queue
-  int nums;                    // Number of process
-  int prnums[4];               // Number of process with priority
 };
 
 // Process memory is laid out contiguously, low addresses first:

@@ -4,22 +4,6 @@
 
 #define __TEST_LOCKNUM 10000
 
-// int
-// strcmp(char* c1, char* c2)
-// {
-  
-//   while (!*c1 || !*c2) {
-//     if (*c1 > *c2) 
-//       return 1;
-//     if (*c1 < *c2)
-//       return -1;
-    
-//     c1++;
-//     c2++;
-//   }
-//   return 0;
-// }
-
 int 
 main(int argc, char* argv[]) 
 {

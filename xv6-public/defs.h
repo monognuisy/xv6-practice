@@ -121,7 +121,7 @@ int             wait(void);
 void            wakeup(void*);
 void            yield(void);
 // custom
-void            yield_L2(void);
+void            yield_call(void);
 void            demote(struct proc*);
 void            elapse(void);
 void            boost(void);

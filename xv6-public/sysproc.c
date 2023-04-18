@@ -141,3 +141,11 @@ sys_setPriority(void)
 
   return 0;
 }
+
+int
+sys_yield(void)
+{
+  yield_call();
+
+  return 0;
+}
