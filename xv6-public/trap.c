@@ -14,8 +14,6 @@ extern uint vectors[];  // in vectors.S: array of 256 entry pointers
 struct spinlock tickslock;
 uint ticks;
 
-extern int sys_schedulerLock(void);
-extern int sys_schedulerUnlock(void);
 
 void
 tvinit(void)
@@ -28,8 +26,8 @@ tvinit(void)
   SETGATE(idt[128], 0, SEG_KCODE<<3, vectors[128], DPL_USER); 
 
   // set interrupt 129, 130 user-executable
-  SETGATE(idt[129], 0, SEG_KCODE<<3, vectors[129], DPL_USER);
-  SETGATE(idt[130], 0, SEG_KCODE<<3, vectors[130], DPL_USER);
+  SETGATE(idt[129], 1, SEG_KCODE<<3, vectors[129], DPL_USER);
+  SETGATE(idt[130], 1, SEG_KCODE<<3, vectors[130], DPL_USER);
 
   initlock(&tickslock, "time");
 }
@@ -64,18 +62,14 @@ trap(struct trapframe *tf)
     break;
   // trap 129: schedulerLock
   case 129:
-    if (myproc()->killed)
-      exit();
     myproc()->tf = tf;
-    sys_schedulerLock();
-    exit();
+    schedulerLock(2021031685);
+    break;
   // trap 130: schedulerUnlock
   case 130:
-    if (myproc()->killed)
-      exit();
     myproc()->tf = tf;
-    sys_schedulerUnlock();
-    exit();
+    schedulerUnlock(2021031685);
+    break;
   
   case T_IRQ0 + IRQ_TIMER:
     if(cpuid() == 0){

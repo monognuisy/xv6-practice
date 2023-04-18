@@ -502,13 +502,13 @@ scheduler(void)
 
     if (!specialproc) goto L0sched;
 SPECIALsched:
-    p = specialproc;
-    while (specialproc && (p->state == RUNNABLE || p->state == RUNNING)) {
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
 
-      swtch(&(c->scheduler), p->context);
+    while (specialproc && specialproc->state == RUNNABLE) {
+      c->proc = specialproc;
+      switchuvm(specialproc);
+      specialproc->state = RUNNING;
+
+      swtch(&(c->scheduler), specialproc->context);
       switchkvm();
 
       c->proc = 0;
@@ -825,7 +825,6 @@ schedulerLock(int password)
     cprintf("[killed] pid: %d, time quantum: %d, level: %d\n",
              p->pid, p->localtime, p->queue);
     kill(p->pid);
-    // exit();
     return;
   }
   if (specialproc) {
@@ -838,7 +837,10 @@ schedulerLock(int password)
 
   ticks = 0;
   p->queue = SPECIAL;
+  p->state = RUNNABLE;
   specialproc = p;
+
+  cprintf("state: %d\n", specialproc->state);
 
   release(&ptable.lock);
 }

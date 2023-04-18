@@ -8,10 +8,12 @@ int
 main(int argc, char* argv[]) 
 {
   int pid;
-  char* s = "lock";
 
   if (argc < 2) {
-    printf(1, "Usage: lock_test [lock / unlock]\n");
+    printf(1, "Usage: lock_test [lock / int / etc...]\n");
+    printf(1, "lock  : use scheduler lock\n");
+    printf(1, "int   : use interrupt for scheduler lock\n");
+    printf(1, "etc...: use mlfq scheduler\n");
     exit();
   }
 
@@ -34,8 +36,12 @@ main(int argc, char* argv[])
 
   // parent process
   // lock scheduler
-  if (!strcmp(argv[1], s))
+  if (!strcmp(argv[1], "lock"))
     schedulerLock(2021031685);
+  else if(!strcmp(argv[1], "int")) {
+    printf(1, "int called!\n");
+    __asm__("int $129");
+  }
 
   int y = 0;
   for (int i = 0; i < __TEST_LOCKNUM; i++) {
@@ -47,8 +53,10 @@ main(int argc, char* argv[])
     }
   }
 
-  if (!strcmp(argv[1], s))
+  if (!strcmp(argv[1], "lock"))
     schedulerUnlock(2021031685);
+  else if(!strcmp(argv[1], "int"))
+    __asm__("int $130");
 
   wait();
 

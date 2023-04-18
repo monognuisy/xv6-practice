@@ -10,7 +10,9 @@ main(int argc, char *argv[])
   int pid;
 
   if (argc < 2) {
-    printf(1, "Usage: yield_test [yield/noyield]\n");
+    printf(1, "Usage: yield_test [yield / etc...]\n");
+    printf(1, "yield : yield in L2\n");
+    printf(1, "etc...: default mlfq scheduler\n");
     exit();
   }
   
