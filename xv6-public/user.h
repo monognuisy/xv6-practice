@@ -28,6 +28,7 @@ void  schedulerLock(int);
 void  schedulerUnlock(int);
 void  setPriority(int, int);
 int getLevel(void);
+void  yield_call(void);
 
 // ulib.c
 int stat(const char*, struct stat*);
