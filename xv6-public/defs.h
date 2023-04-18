@@ -119,9 +119,9 @@ void            sleep(void*, struct spinlock*);
 void            userinit(void);
 int             wait(void);
 void            wakeup(void*);
-void            yield(void);
+void            __yield(void);
 // custom
-void            yield_call(void);
+void            yield(void);
 void            demote(struct proc*);
 void            elapse(void);
 void            boost(void);

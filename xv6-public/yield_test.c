@@ -38,7 +38,7 @@ main(int argc, char *argv[])
     printf(1, "[parent]: %d\n", getLevel());
 
     if (!strcmp(argv[1], "yield") && getLevel() == 2)
-      yield_call(); 
+      yield(); 
   }
 
   wait();

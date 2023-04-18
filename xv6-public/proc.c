@@ -231,8 +231,9 @@ userinit(void)
   if (isempty_queue(L0)) {
     queues[L0].front = p;
   }
-  // set back of L0 queue
-  queues[L0].back = QNEXT(ptable.proc, p);
+  // set back of L0 appropriately
+  setback(L0, p);
+  // queues[L0].back = QNEXT(ptable.proc, p);
 
   release(&ptable.lock);
 }
@@ -403,6 +404,7 @@ wait(void)
   }
 }
 
+// Demote process to higher-level queue
 void
 demote(struct proc *p) 
 {
@@ -462,19 +464,19 @@ boost(void)
 
   acquire(&ptable.lock);
   specialproc = 0;
+
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    // set specialproc to front of L0 queue
     if (p->queue == SPECIAL) {
       queues[L0].front = p;
-
-      if (isempty_queue(L0))  
-        queues[L0].back = QNEXT(ptable.proc, p);
+      setback(L0, p);
     }
 
     p->queue = L0;
     p->localtime = 0;
     p->priority = 3;
   }
-  
+
   release(&ptable.lock);
 }
 
@@ -517,6 +519,7 @@ SPECIALsched:
     if (specialproc) goto schedend;
 
 L0sched:
+    // find and set first process. then, schedule as RR.
     p = firstproc(L0);
     for (p = queues[L0].front; p != queues[L0].back; p = QNEXT(ptable.proc, p)) {
       if(p->state != RUNNABLE || p->queue != L0)
@@ -581,7 +584,7 @@ L1sched:
       }
     }
 
-    // do FCFS scheduling
+    // do context switching
     c->proc = fcfsp;
     switchuvm(fcfsp);
     fcfsp->state = RUNNING;
@@ -624,7 +627,7 @@ sched(void)
 
 // Give up the CPU for one scheduling round.
 void
-yield(void)
+__yield(void)
 {
   struct proc *p;
   acquire(&ptable.lock);  //DOC: yieldlock
@@ -635,9 +638,9 @@ yield(void)
   release(&ptable.lock);
 }
 
-// special yield systemcall for L2 scheduler
+// special yield systemcall including L2 scheduler
 void
-yield_call(void)
+yield(void)
 {
   struct proc *p;
   acquire(&ptable.lock);  //DOC: yieldlock
@@ -660,9 +663,6 @@ yield_call(void)
   sched();
   release(&ptable.lock);
 }
-
-// Pass to next process in L2(FCFS) scheduler
-// only called inside yield()
 
 // A fork child's very first scheduling by scheduler()
 // will swtch here.  "Return" to user space.
@@ -818,16 +818,10 @@ schedulerLock(int password)
   acquire(&ptable.lock);
 
   if (!p) {
-    return;
-  }
-  if (password != 2021031685) {
     release(&ptable.lock);
-    cprintf("[killed] pid: %d, time quantum: %d, level: %d\n",
-             p->pid, p->localtime, p->queue);
-    kill(p->pid);
     return;
   }
-  if (specialproc) {
+  if (password != 2021031685 || specialproc) {
     release(&ptable.lock);
     cprintf("[killed] pid: %d, time quantum: %d, level: %d\n",
              p->pid, p->localtime, p->queue);
@@ -839,8 +833,6 @@ schedulerLock(int password)
   p->queue = SPECIAL;
   p->state = RUNNABLE;
   specialproc = p;
-
-  cprintf("state: %d\n", specialproc->state);
 
   release(&ptable.lock);
 }
@@ -855,20 +847,12 @@ schedulerUnlock(int password)
     release(&ptable.lock);
     return;
   }
-  if (password != 2021031685) {
+  if (password != 2021031685 || p->queue != SPECIAL) {
     release(&ptable.lock);
     cprintf("[killed] pid: %d, time quantum: %d, level: %d\n",
              p->pid, p->localtime, p->queue);
 
     kill(p->pid);
-    return;
-  }
-  if (p->queue != SPECIAL) {
-    release(&ptable.lock);
-    cprintf("[killed] pid: %d, time quantum: %d, level: %d\n",
-             p->pid, p->localtime, p->queue);
-    kill(p->pid);
-
     return;
   }
 
@@ -879,8 +863,7 @@ schedulerUnlock(int password)
   p->priority = 3;
   queues[L0].front = p;
 
-  if (isempty_queue(L0))
-    queues[L0].back = QNEXT(ptable.proc, p);
+  setback(L0, p);
 
   release(&ptable.lock);
 }

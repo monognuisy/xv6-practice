@@ -145,7 +145,7 @@ sys_setPriority(void)
 int
 sys_yield(void)
 {
-  yield_call();
+  yield();
 
   return 0;
 }
