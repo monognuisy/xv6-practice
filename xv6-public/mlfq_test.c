@@ -76,6 +76,31 @@ int main(int argc, char *argv[])
   printf(1, "MLFQ test start\n");
 
   printf(1, "[Test 1] default\n");
+  pid = fork_children();
+
+  if (pid != parent)
+  {
+    for (i = 0; i < NUM_LOOP; i++)
+    {
+      // int x = 1;
+      int x = getLevel();
+      if (x < 0 || x > 4)
+      {
+        printf(1, "Wrong level: %d\n", x);
+        exit();
+      }
+      count[x]++;
+    }
+    printf(1, "Process %d\n", pid);
+    for (i = 0; i < MAX_LEVEL; i++) 
+      printf(1, "L%d: %d\n", i, count[i]);
+
+
+  }
+  exit_children();
+  printf(1, "[Test 1] finished\n");
+
+  printf(1, "[Test 2] setPriority\n");
   pid = fork_children2();
 
   if (pid != parent)
@@ -96,7 +121,32 @@ int main(int argc, char *argv[])
       printf(1, "L%d: %d\n", i, count[i]);
   }
   exit_children();
-  printf(1, "[Test 1] finished\n");
+  printf(1, "[Test 2] finished\n");
+
+    printf(1, "[Test 3] maxlevel\n");
+  pid = fork_children3();
+
+  if (pid != parent)
+  {
+    for (i = 0; i < NUM_LOOP; i++)
+    {
+      // int x = 1;
+      int x = getLevel();
+      if (x < 0 || x > 4)
+      {
+        printf(1, "Wrong level: %d\n", x);
+        exit();
+      }
+      count[x]++;
+    }
+    printf(1, "Process %d\n", pid);
+    for (i = 0; i < MAX_LEVEL; i++)
+      printf(1, "L%d: %d\n", i, count[i]);
+
+    printf(1, "maxlevel: %d\n", max_level);
+  }
+  exit_children();
+  printf(1, "[Test 3] finished\n");
   printf(1, "done\n");
   exit();
 }

@@ -31,6 +31,8 @@ main(int argc, char *argv[])
 
   int x = 0;
   for (;;) {
+    // default: in L2, parent always runs first
+    setPriority(getpid(), 0);
     for (int i = 0; i < __TEST_YIELDNUM; i++) {
     x = x;
     }

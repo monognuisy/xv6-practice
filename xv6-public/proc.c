@@ -810,6 +810,7 @@ procdump(void)
   }
 }
 
+// Lock the scheduler
 void 
 schedulerLock(int password)
 {
@@ -837,6 +838,7 @@ schedulerLock(int password)
   release(&ptable.lock);
 }
 
+// Unlock the scheduler
 void
 schedulerUnlock(int password)
 {
@@ -868,6 +870,7 @@ schedulerUnlock(int password)
   release(&ptable.lock);
 }
 
+// Get level of current process
 int
 getLevel(void)
 {
@@ -876,6 +879,9 @@ getLevel(void)
   return p->queue;
 }
 
+
+// setPriority(int pid, int priority)
+// Set pid process's priority manually
 void
 setPriority(int pid, int priority)
 {

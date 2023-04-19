@@ -7,11 +7,9 @@
 int
 main(void)
 {
-  int i;
-  int j;
   int x = 10;
-  for (i = 0; i < __TEST_LONGNUM; i++) {
-    for (j = 0; j < __TEST_LONGNUM; j++) {
+  for (int i = 0; i < __TEST_LONGNUM; i++) {
+    for (int j = 0; j < __TEST_LONGNUM; j++) {
       if (j & 1)
         x += 1;
       else 
