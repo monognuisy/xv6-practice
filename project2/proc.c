@@ -88,6 +88,7 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  p->limit = 0;
 
   release(&ptable.lock);
 
@@ -531,4 +532,28 @@ procdump(void)
     }
     cprintf("\n");
   }
+}
+
+// Set memory limit (bytes)
+int 
+setmemorylimit(int pid, int limit) 
+{
+  struct proc *p;
+
+  if (limit < 0)
+    return -1;
+
+  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if (pid == p->pid) goto found;
+  }
+
+  return -1;
+
+found:
+  if (p->sz > limit) 
+    return -1;
+
+  p->limit = limit;
+
+  return 0;
 }

@@ -24,6 +24,7 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+int setmemorylimit(int, int);
 
 // ulib.c
 int stat(const char*, struct stat*);
