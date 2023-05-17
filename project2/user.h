@@ -25,6 +25,8 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int setmemorylimit(int, int);
+// for pmanager
+int listproc(void);
 
 // ulib.c
 int stat(const char*, struct stat*);
