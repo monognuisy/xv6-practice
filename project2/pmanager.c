@@ -5,16 +5,31 @@
 int getcmd(char*, int);
 int parserun(char*);
 int listproc(void);
+int checkspace(char*);
+char* getop(char*, char*);
 
 int
 main(void) 
 {
   static char buf[100];
+  int status = 0;
 
-  while (getcmd(buf, sizeof(buf)) > 0) {
-    parserun(buf);
+  while (getcmd(buf, sizeof(buf)) >= 0) {
+    // 0 for normal, 1 for exit, -1 for error
+    status = parserun(buf);
+
+    switch (status) {
+      case 1:
+        exit();
+      case -1:
+        printf(1, "bad command for pmanager!\n");
+      default:
+        break;
+    }
   }
   exit();
+
+  return 0;
 }
 
 int
@@ -31,9 +46,106 @@ getcmd(char *buf, int nbuf)
 int 
 parserun(char *buf)
 {
-  if (!strcmp(buf, "list")) {
-    // need to be syscall! -> for checking procs
-    listproc();
+  // opcode: list | kill | execute | memlim | exit
+  char op[100];
+  char *next = getop(buf, op);
+
+  if (!strcmp(op, "exit")) {
+    return 1;
   }
 
+  // List process information
+  if (!strcmp(op, "list")) {
+    listproc();
+    return 0;
+  }
+
+  if (!strcmp(op, "kill")) {
+    char pidstr[20];
+    int pid;
+
+    getop(next, pidstr);
+
+    // for (char *tmp = next; tmp != ' ' && tmp != '\n' && tmp != 0; tmp++) {
+    //   *(res++) = *tmp;
+    // }
+    // *res = 0;
+
+    // bad pid
+    if ((pid = atoi(pidstr)) <= 0) {
+      return -1;
+    }
+
+    return kill(pid);
+  }
+
+  if (!strcmp(op, "execute")) {
+    char path[100], stacksizestr[20];
+    int stacksize;
+
+    getop(getop(next, path), stacksizestr);
+
+    printf(1, "%s\n", path);
+
+    if ((stacksize = atoi(stacksizestr)) <= 0) {
+      return -1;
+    }
+
+    printf(1, "%d\n", stacksize);
+
+    char *argv[10];
+    argv[0] = path;
+
+    return exec2(path, argv, stacksize);
+  }
+
+  if (!strcmp(op, "memlimit")) {
+    char pidstr[20], limstr[20];
+    int pid, limit;
+
+    getop(getop(next, pidstr), limstr);
+
+    if ((pid = atoi(pidstr)) <= 0 || (limit = atoi(limstr)) < 0) {
+      return -1;
+    }
+
+    return setmemorylimit(pid, limit);
+  }
+
+  return -1;
+}
+
+// Parse op and return string after current op.
+char *
+getop(char *src, char *dst) 
+{
+  // implement copy op from src to dst
+  while (checkspace(src) > 0) {
+    *dst = *src;
+    dst++;
+    src++;
+  }
+  
+  // add null at the end of string
+  *dst = 0;
+
+  // skip spaces for next string
+  while (checkspace(src) == 0) {
+    src++;
+  }
+
+  return src;
+}
+
+// -1 for null, 0 for spaces, 1 for others
+int
+checkspace(char *str)
+{
+  if (*str == 0) 
+    return -1;
+
+  if (*str == ' ' || *str == '\n' || *str == '\t')
+    return 0;
+
+  return 1;
 }

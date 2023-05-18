@@ -563,7 +563,7 @@ listproc(void)
 {
   struct proc *p;
 
-  cprintf("procname \tpid \tstackpage \tmemory \tmemlimit\n");
+  cprintf("procname \tpid \tstack \tmemory \tmemlimit\n");
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
     if (p->state == RUNNING || p->state == RUNNABLE) {
       cprintf("%s \t%d \t%d \t%d \t%d \n", p->name, p->pid, p->stackpage, p->sz, p->limit);
