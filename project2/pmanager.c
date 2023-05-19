@@ -66,37 +66,48 @@ parserun(char *buf)
 
     getop(next, pidstr);
 
-    // for (char *tmp = next; tmp != ' ' && tmp != '\n' && tmp != 0; tmp++) {
-    //   *(res++) = *tmp;
-    // }
-    // *res = 0;
-
     // bad pid
     if ((pid = atoi(pidstr)) <= 0) {
       return -1;
     }
 
-    return kill(pid);
+    int status = kill(pid);
+
+    if (!status) printf(1, "successfully killed pid: %d\n", pid);
+    else printf(1, "killed failed\n");
+
+    return status;
   }
 
   if (!strcmp(op, "execute")) {
     char path[100], stacksizestr[20];
+    char *argv[10];
     int stacksize;
+    int pid;
 
     getop(getop(next, path), stacksizestr);
 
-    printf(1, "%s\n", path);
-
     if ((stacksize = atoi(stacksizestr)) <= 0) {
+      printf(1, "stacksize must be int\n");
       return -1;
     }
 
-    printf(1, "%d\n", stacksize);
-
-    char *argv[10];
     argv[0] = path;
 
-    return exec2(path, argv, stacksize);
+    // parent
+    if ((pid = fork())) {
+      wait();
+      return 0;
+    }
+
+    // children
+    int status = exec2(path, argv, stacksize);
+    if (status) {
+      printf(1, "exec failed\n");
+      exit();
+    }
+
+    return status;
   }
 
   if (!strcmp(op, "memlimit")) {
@@ -106,10 +117,14 @@ parserun(char *buf)
     getop(getop(next, pidstr), limstr);
 
     if ((pid = atoi(pidstr)) <= 0 || (limit = atoi(limstr)) < 0) {
+      printf(1, "pid and limit must be int\n");
       return -1;
     }
 
-    return setmemorylimit(pid, limit);
+    int status = setmemorylimit(pid, limit);
+    if (status) printf(1, "setmemorylimit failed\n");
+
+    return status;
   }
 
   return -1;

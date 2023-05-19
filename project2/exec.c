@@ -12,7 +12,7 @@
 int
 exec(char *path, char **argv)
 {
-  return exec2(path, argv, 2);
+  return exec2(path, argv, 1);
 }
 
 int
@@ -114,6 +114,9 @@ exec2(char *path, char **argv, int stacksize)
   curproc->sz = sz;
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
+  
+  // update current stacksize
+  curproc->stackpage = stacksize;
   switchuvm(curproc);
   freevm(oldpgdir);
   return 0;
