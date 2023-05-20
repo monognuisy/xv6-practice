@@ -7,10 +7,8 @@
 #include "proc.h"
 #include "spinlock.h"
 
-struct {
-  struct spinlock lock;
-  struct proc proc[NPROC];
-} ptable;
+
+struct ptable_t ptable;
 
 static struct proc *initproc;
 
@@ -88,7 +86,10 @@ allocproc(void)
 found:
   p->state = EMBRYO;
   p->pid = nextpid++;
+  
+  // set default limit to 0
   p->limit = 0;
+  // p->thread = 0;
 
   release(&ptable.lock);
 

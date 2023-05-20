@@ -1,3 +1,6 @@
+#pragma once
+#include "spinlock.h"
+
 // Per-CPU state
 struct cpu {
   uchar apicid;                // Local APIC ID
@@ -12,6 +15,17 @@ struct cpu {
 
 extern struct cpu cpus[NCPU];
 extern int ncpu;
+
+// struct thread {
+//   int id;                          // thread id
+//   void *(*func)(void *);           // function executed by thread
+//   void *sp;                        // stack pointer
+//   void *stack;                     // thread stack
+//   void *args;                      // argument for tfunction
+// };
+
+// typedef struct thread* thread_t;
+
 
 //PAGEBREAK: 17
 // Saved registers for kernel context switches.
@@ -51,6 +65,17 @@ struct proc {
   char name[16];               // Process name (debugging)
   int stackpage;               // Stack size (pages)
   int limit;                   // Memory limit (bytes)
+  int thread_num;              // Number of threads
+  int isthread;                // Indicate if this is thread (bool)
+  int mother;                  // Creator of thread
+  thread_t tid;                // Thread ID
+  thread_t nexttid;            // Thread ID for next thread
+  struct proc* threads[NPROC]; // Threads
+};
+
+struct ptable_t {
+  struct spinlock lock;
+  struct proc proc[NPROC];
 };
 
 // Process memory is laid out contiguously, low addresses first:
