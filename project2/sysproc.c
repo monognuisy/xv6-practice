@@ -106,3 +106,28 @@ sys_listproc(void)
 {
   return listproc();
 }
+
+int
+sys_thread_create(void)
+{
+  thread_t *thread;
+  void *(*start_routine)(void*);
+  void *arg;
+
+  argptr(0, (char**)&thread, sizeof(thread));
+  argptr(0, (char**)&start_routine, sizeof(start_routine));
+  argptr(0, (char**)&arg, sizeof(arg));
+
+  return thread_create(thread, start_routine, arg);
+}
+
+int
+sys_thread_join(void)
+{
+  return 0;
+}
+int
+sys_thread_exit(void)
+{
+  return 0;
+}

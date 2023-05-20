@@ -67,9 +67,9 @@ struct proc {
   int limit;                   // Memory limit (bytes)
   int thread_num;              // Number of threads
   int isthread;                // Indicate if this is thread (bool)
-  int mother;                  // Creator of thread
   thread_t tid;                // Thread ID
   thread_t nexttid;            // Thread ID for next thread
+  struct proc* mother;         // Creator of thread
   struct proc* threads[NPROC]; // Threads
 };
 

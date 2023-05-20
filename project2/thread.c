@@ -6,7 +6,7 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
-#include "user.h"
+// #include "user.h"
 
 extern struct ptable_t ptable;
 
@@ -20,12 +20,13 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 {
   struct proc *mother = myproc();
   int pid;
-  int ppid = mother->pid;
+  // int ppid = mother->pid;
   
   // parent
   if ((pid = fork())) {
     // parent of child will be changed
     // so, return without wait()
+    wait();
     return 0;
   }
 
@@ -64,7 +65,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
     goto bad;
 
   // change entry point of thread to start_routine
-  son->tf->eip = start_routine;
+  son->tf->eip = (uint)start_routine;
   son->tf->esp = sp;
 
   // admit son as thread of mother proc
@@ -85,6 +86,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   release(&ptable.lock);
   
 bad:
+  cprintf("bad thread!\n");
   release(&ptable.lock);
   son->isthread = 0;
   mother->threads[son->tid] = 0;
