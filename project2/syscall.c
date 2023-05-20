@@ -132,6 +132,9 @@ static int (*syscalls[])(void) = {
 [SYS_close]   sys_close,
 [SYS_setmemorylimit]  sys_setmemorylimit,
 [SYS_listproc]  sys_listproc,
+[SYS_thread_create] SYS_thread_create,
+[SYS_thread_join]   SYS_thread_join,
+[SYS_thread_exit]   SYS_thread_exit,
 };
 
 void
