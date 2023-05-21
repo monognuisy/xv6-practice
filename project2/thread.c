@@ -8,123 +8,144 @@
 #include "spinlock.h"
 // #include "user.h"
 
+#define NTHREAD 8
+
 extern struct ptable_t ptable;
+extern void wakeup1(void *chan);
 
 int thread_create(thread_t*, void*(*)(void*), void*);
-int thread_join(thread_t*, void**);
+int thread_join(thread_t, void**);
 int thread_start(struct proc*); 
 void thread_exit(void*);
 
 int
 thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 {
-  struct proc *mother = myproc();
-  struct proc *son;
 
-  // cprintf("%d\n", mother->tf->eip);
-  
-  // parent
+  // Allocate a new `proc` structure for the LWP
+  struct proc* lwp;
+  struct proc* mother = myproc();
 
-
-  if ((son = allocproc()) == 0) {
-    return -1;
+  if ((lwp = allocproc()) == 0) {
+    return -1; // Failed to allocate a new LWP
   }
 
+  // Share the same address space as the parent process
+  lwp->pgdir = mother->pgdir;
+  lwp->mother = mother;
+  lwp->parent = mother->parent;
 
-  son->pgdir = mother->pgdir;
-
-  // child (thread)
-  uint sp, ustack[4];
-  uint argc = 0;
-
-  son->isthread = 1;
-  son->mother = mother;
-  son->parent = mother->parent;
-  *son->tf = *mother->tf;
-  son->tf->eax = 0;
-
-  // set thread's id to proc's next thread number
-  *thread = son->tid = ++(mother->thread_num);
-
-  uint sz = mother->sz;
-
-  // increase mother's, son's size
-  if ((son->sz = mother->sz = 
-        allocuvm(son->pgdir, sz, sz + 2*PGSIZE)) == 0) 
+  if ((lwp->sz = mother->sz = allocuvm(lwp->pgdir, mother->sz, mother->sz + 2*PGSIZE)) == 0) {
     goto bad;
+  }
 
   // Build stack guard
-  clearpteu(son->pgdir, (char*)(son->sz - 2*PGSIZE));
-  sp = son->sz; 
+  clearpteu(lwp->pgdir, (char*)(lwp->sz - 2*PGSIZE));
 
-  ustack[3] = 0;                    // end of user stack
-  ustack[2] = sp - (argc + 1)*4;    // argv pointer
-  ustack[1] = argc;
-  ustack[0] = 0xffffffff;           // fake return PC
+  cprintf("is this okay???? pid: %d, func: %d\n", lwp->pid, start_routine);
 
-  sp -= (3+argc+1) * 4;
+  // Set up the LWP's stack
+  uint sp = lwp->sz;
+  uint ustack[2];
+  ustack[0] = (uint)arg;
+  ustack[1] = 0; // Placeholder for the return address
 
-  if(copyout(son->pgdir, sp, ustack, (3+argc+1)*4) < 0)
+  sp -= 2*sizeof(uint);
+
+  // Allocate and copy the user stack
+  if (copyout(lwp->pgdir, sp, ustack, 2*sizeof(uint)) < 0) {
     goto bad;
-
-
-  // change entry point of thread to start_routine
-  son->tf->eip = (uint)start_routine;
-  son->tf->esp = sp;
-
-  cprintf("mother eip: %p, son eip: %p\n", mother->tf->eip, son->tf->eip);
-
-  // admit son as thread of mother proc
-  mother->threads[son->tid] = son;
-
-  // update siblings' size
-  struct proc **th;
-  for (th = mother->threads; th < &mother->threads[NPROC]; th++) {
-    if (!*th) continue;
-    if (!(*th)->isthread) continue;
-    
-    (*th)->sz = son->sz;
   }
 
-  int i;
-  for(i = 0; i < NOFILE; i++)
-    if(mother->ofile[i])
-      son->ofile[i] = filedup(mother->ofile[i]);
-  son->cwd = idup(mother->cwd);
+  // Initialize the thread's trapframe
+  *lwp->tf = *mother->tf;
+  lwp->tf->esp = sp;
+  lwp->tf->eip = (uint)start_routine;
 
-  safestrcpy(son->name, mother->name, sizeof(mother->name));
+  // Set the thread ID
+  *thread = lwp->tid = ++(mother->thread_num);
 
-  cprintf("mother pid: %d\nson pid: %d\n", mother->pid, son->pid);
+  // Add the LWP to the thread management data structure (e.g., array)
+  mother->threads[lwp->tid] = lwp;
+
+  // Mark the LWP as runnable
+  // lwp->state = RUNNABLE;
 
   acquire(&ptable.lock);
-
-  switchuvm(son);
-
-  son->state = RUNNABLE;
+  lwp->state = RUNNABLE;
   release(&ptable.lock);
 
 
-  return 0;
+  return 0; // Thread creation successful
 
 bad:
-  cprintf("bad thread!\n");
-  release(&ptable.lock);
-  son->isthread = 0;
-  mother->threads[son->tid] = 0;
-  kill(son->pid);
+  kfree(lwp->kstack);
+  lwp->kstack = 0;
+  lwp->state = UNUSED;
   return -1;
 }
 
-int
-thread_start(struct proc* p_thread)
-{
-  if (p_thread->isthread) return -1;
+int thread_join(thread_t thread, void** retval) {
+  struct proc* p = myproc();
 
-  // switchuvm(p_thread);  
-  pushcli();
-  lcr3(V2P(p_thread->pgdir));
-  popcli(); 
-  p_thread->state = RUNNABLE;
+  if (thread >= NTHREAD || p->threads[thread] == 0) {
+    return -1; // Invalid thread ID or thread does not exist
+  }
 
-  return 0;
+  struct proc* lwp = p->threads[thread];
+
+  acquire(&ptable.lock);
+
+  // Wait for the LWP to complete
+  while (lwp->state != ZOMBIE) {
+    sleep(lwp, &ptable.lock);
+  }
+
+  // Retrieve the LWP's return value
+  if (retval != 0) {
+    *retval = lwp->retval;
+  }
+
+  // Clean up the LWP
+  kfree(lwp->kstack);
+  lwp->kstack = 0;
+  lwp->pid = 0;
+  lwp->parent = 0;
+  lwp->name[0] = 0;
+  lwp->killed = 0;
+  lwp->state = UNUSED;
+
+  release(&ptable.lock);
+
+  return 0; // Thread join successful
+}
+
+void thread_exit(void* retval) {
+  struct proc* p = myproc();
+  struct proc* parent = p->parent;
+
+  // Set the return value in the current LWP's proc structure
+  p->retval = retval;
+
+  acquire(&ptable.lock);
+
+  // Wake up the parent thread waiting in thread_join
+  wakeup1(parent);
+
+  // Clean up the LWP
+  kfree(p->kstack);
+  p->kstack = 0;
+  p->pid = 0;
+  p->parent = 0;
+  p->name[0] = 0;
+  p->killed = 0;
+  p->state = ZOMBIE;
+
+  // Release the process table lock before jumping into the scheduler
+  release(&ptable.lock);
+
+  // Jump into the scheduler, never to return
+  sched();
+
+  // Note: The execution will never reach this point
 }

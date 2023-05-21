@@ -166,7 +166,7 @@ void            timerinit(void);
 
 // thread.c
 int             thread_create(thread_t*, void*(*)(void*), void*);
-int             thread_join(thread_t*, void**);
+int             thread_join(thread_t, void**);
 void            thread_exit(void*);
 
 // trap.c

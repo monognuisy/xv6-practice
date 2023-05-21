@@ -124,10 +124,20 @@ sys_thread_create(void)
 int
 sys_thread_join(void)
 {
-  return 0;
+  int thread;
+  void **retval;
+
+  argint(0, &thread);
+  argptr(1, (char**)&retval, sizeof(retval));
+
+  return thread_join((thread_t)thread, retval);
 }
 int
 sys_thread_exit(void)
 {
+  void *retval;
+
+  argptr(0, (char**)&retval, sizeof(retval));
+  thread_exit(retval);
   return 0;
 }
