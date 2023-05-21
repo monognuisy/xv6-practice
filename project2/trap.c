@@ -46,6 +46,8 @@ trap(struct trapframe *tf)
     return;
   }
 
+
+
   switch(tf->trapno){
   case T_IRQ0 + IRQ_TIMER:
     if(cpuid() == 0){
@@ -91,6 +93,11 @@ trap(struct trapframe *tf)
             "eip 0x%x addr 0x%x--kill proc\n",
             myproc()->pid, myproc()->name, tf->trapno,
             tf->err, cpuid(), tf->eip, rcr2());
+    
+    if(tf->trapno == 14) {
+      cprintf("eip(uint): %d\n", tf->eip);
+    }
+
     myproc()->killed = 1;
   }
 

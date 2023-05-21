@@ -17,6 +17,8 @@ int main(void) {
   int thread_args[NTHREADS];
   void* thread_retval[NTHREADS];
 
+  printf(1, "%d is func\n", thread_entry);
+
   // Create threads
   int i;
   for (i = 0; i < NTHREADS; i++) {

@@ -8,7 +8,7 @@
 #include "spinlock.h"
 // #include "user.h"
 
-#define NTHREAD 8
+#define NTHREAD 32
 
 extern struct ptable_t ptable;
 extern void wakeup1(void *chan);
@@ -21,6 +21,7 @@ void thread_exit(void*);
 int
 thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 {
+  cprintf("start: %d\n", start_routine);
 
   // Allocate a new `proc` structure for the LWP
   struct proc* lwp;
@@ -42,7 +43,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   // Build stack guard
   clearpteu(lwp->pgdir, (char*)(lwp->sz - 2*PGSIZE));
 
-  cprintf("is this okay???? pid: %d, func: %d\n", lwp->pid, start_routine);
+
 
   // Set up the LWP's stack
   uint sp = lwp->sz;
@@ -61,6 +62,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   *lwp->tf = *mother->tf;
   lwp->tf->esp = sp;
   lwp->tf->eip = (uint)start_routine;
+  lwp->tf->eax = 0;
 
   // Set the thread ID
   *thread = lwp->tid = ++(mother->thread_num);
@@ -68,13 +70,22 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   // Add the LWP to the thread management data structure (e.g., array)
   mother->threads[lwp->tid] = lwp;
 
+  for (int i = 1; i < NTHREAD; i++) {
+    if (mother->threads[i]) {
+      mother->threads[i]->sz = lwp->sz;
+    }
+  }
+
   // Mark the LWP as runnable
-  // lwp->state = RUNNABLE;
+  
+  switchuvm(lwp);
 
   acquire(&ptable.lock);
   lwp->state = RUNNABLE;
   release(&ptable.lock);
 
+  cprintf("is this okay???? pid: %d, func: %d\n", lwp->pid, start_routine);
+  cprintf("%d's eip: %d\n", lwp->pid, lwp->tf->eip);
 
   return 0; // Thread creation successful
 
