@@ -25,24 +25,23 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   
   // parent
 
+
   if ((son = allocproc()) == 0) {
     return -1;
   }
 
-  acquire(&ptable.lock);
+
+  son->pgdir = mother->pgdir;
+
   // child (thread)
-  // struct proc *son = myproc();
   uint sp, ustack[4];
   uint argc = 0;
 
   son->isthread = 1;
   son->mother = mother;
-  son->pgdir = mother->pgdir;
   son->parent = mother->parent;
   *son->tf = *mother->tf;
   son->tf->eax = 0;
-
-  cprintf("%p\n", son);
 
   // set thread's id to proc's next thread number
   *thread = son->tid = ++(mother->thread_num);
@@ -68,9 +67,12 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   if(copyout(son->pgdir, sp, ustack, (3+argc+1)*4) < 0)
     goto bad;
 
+
   // change entry point of thread to start_routine
   son->tf->eip = (uint)start_routine;
   son->tf->esp = sp;
+
+  cprintf("mother eip: %p, son eip: %p\n", mother->tf->eip, son->tf->eip);
 
   // admit son as thread of mother proc
   mother->threads[son->tid] = son;
@@ -84,20 +86,29 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
     (*th)->sz = son->sz;
   }
 
+  int i;
+  for(i = 0; i < NOFILE; i++)
+    if(mother->ofile[i])
+      son->ofile[i] = filedup(mother->ofile[i]);
+  son->cwd = idup(mother->cwd);
+
+  safestrcpy(son->name, mother->name, sizeof(mother->name));
+
   cprintf("mother pid: %d\nson pid: %d\n", mother->pid, son->pid);
 
-  release(&ptable.lock);
-
+  acquire(&ptable.lock);
 
   switchuvm(son);
+
   son->state = RUNNABLE;
+  release(&ptable.lock);
 
 
   return 0;
 
 bad:
   cprintf("bad thread!\n");
-  // release(&ptable.lock);
+  release(&ptable.lock);
   son->isthread = 0;
   mother->threads[son->tid] = 0;
   kill(son->pid);

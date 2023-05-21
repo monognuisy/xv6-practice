@@ -71,6 +71,7 @@ struct proc {
   thread_t nexttid;            // Thread ID for next thread
   struct proc* mother;         // Creator of thread
   struct proc* threads[NPROC]; // Threads
+  void *retval;
 };
 
 struct ptable_t {

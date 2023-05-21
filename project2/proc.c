@@ -10,13 +10,13 @@
 
 struct ptable_t ptable;
 
-static struct proc *initproc;
+struct proc *initproc;
 
 int nextpid = 1;
 extern void forkret(void);
 extern void trapret(void);
 
-static void wakeup1(void *chan);
+void wakeup1(void *chan);
 
 void
 pinit(void)
@@ -89,6 +89,11 @@ found:
   
   // set default limit to 0
   p->limit = 0;
+  p->mother = p;
+  p->thread_num = 0;
+  p->isthread = 0;
+  p->tid = 0;
+  p->nexttid = 0;
   // p->thread = 0;
 
   release(&ptable.lock);
@@ -456,7 +461,7 @@ sleep(void *chan, struct spinlock *lk)
 //PAGEBREAK!
 // Wake up all processes sleeping on chan.
 // The ptable lock must be held.
-static void
+void
 wakeup1(void *chan)
 {
   struct proc *p;
@@ -574,3 +579,4 @@ listproc(void)
 
   return 0;
 }
+
