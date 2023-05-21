@@ -23,6 +23,8 @@ main(void)
   printf(1, "what?\n");
   thread_create(&t1, dosome, &a); 
 
+  // wait();
+
   exit();
   return 0;
 }

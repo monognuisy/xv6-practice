@@ -19,21 +19,19 @@ int
 thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 {
   struct proc *mother = myproc();
-  int pid;
-  // int ppid = mother->pid;
+  struct proc *son;
+
+  // cprintf("%d\n", mother->tf->eip);
   
   // parent
-  if ((pid = fork())) {
-    // parent of child will be changed
-    // so, return without wait()
-    wait();
-    return 0;
+
+  if ((son = allocproc()) == 0) {
+    return -1;
   }
 
   acquire(&ptable.lock);
-
   // child (thread)
-  struct proc *son = myproc();
+  // struct proc *son = myproc();
   uint sp, ustack[4];
   uint argc = 0;
 
@@ -41,13 +39,19 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   son->mother = mother;
   son->pgdir = mother->pgdir;
   son->parent = mother->parent;
+  *son->tf = *mother->tf;
+  son->tf->eax = 0;
+
+  cprintf("%p\n", son);
 
   // set thread's id to proc's next thread number
   *thread = son->tid = ++(mother->thread_num);
 
+  uint sz = mother->sz;
+
   // increase mother's, son's size
   if ((son->sz = mother->sz = 
-        allocuvm(mother->pgdir, mother->sz, mother->sz + 2*PGSIZE)) == 0) 
+        allocuvm(son->pgdir, sz, sz + 2*PGSIZE)) == 0) 
     goto bad;
 
   // Build stack guard
@@ -80,14 +84,20 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
     (*th)->sz = son->sz;
   }
 
-  if (thread_start(son) < 0)
-    goto bad;
+  cprintf("mother pid: %d\nson pid: %d\n", mother->pid, son->pid);
 
   release(&ptable.lock);
-  
+
+
+  switchuvm(son);
+  son->state = RUNNABLE;
+
+
+  return 0;
+
 bad:
   cprintf("bad thread!\n");
-  release(&ptable.lock);
+  // release(&ptable.lock);
   son->isthread = 0;
   mother->threads[son->tid] = 0;
   kill(son->pid);
@@ -99,7 +109,10 @@ thread_start(struct proc* p_thread)
 {
   if (p_thread->isthread) return -1;
 
-  switchuvm(p_thread);  
+  // switchuvm(p_thread);  
+  pushcli();
+  lcr3(V2P(p_thread->pgdir));
+  popcli(); 
   p_thread->state = RUNNABLE;
 
   return 0;
