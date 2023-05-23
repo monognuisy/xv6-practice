@@ -74,6 +74,8 @@ allocproc(void)
   struct proc *p;
   char *sp;
 
+  if (holding(&ptable.lock))
+    release(&ptable.lock);
   acquire(&ptable.lock);
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
@@ -89,12 +91,12 @@ found:
   
   // set default limit to 0
   p->limit = 0;
+
+  // initialize thread-related fields
   p->mother = p;
   p->thread_num = 0;
   p->isthread = 0;
   p->tid = 0;
-  p->nexttid = 0;
-  // p->thread = 0;
 
   release(&ptable.lock);
 
@@ -339,7 +341,7 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){      
       if(p->state != RUNNABLE)
         continue;
 

@@ -115,8 +115,8 @@ sys_thread_create(void)
   void *arg;
 
   argptr(0, (char**)&thread, sizeof(thread));
-  argptr(0, (char**)&start_routine, sizeof(start_routine));
-  argptr(0, (char**)&arg, sizeof(arg));
+  argptr(1, (char**)&start_routine, sizeof(start_routine));
+  argptr(2, (char**)&arg, sizeof(arg));
 
   return thread_create(thread, start_routine, arg);
 }

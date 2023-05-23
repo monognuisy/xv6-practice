@@ -29,6 +29,12 @@ int main(void) {
     }
   }
 
+  printf(1, "creation done.\n");
+
+  // for (i = 0; i < NTHREADS; i++) {
+  //   printf(1, "tid: %d\n", threads[i]);
+  // }
+
   // Join threads
   for (i = 0; i < NTHREADS; i++) {
     if (thread_join(threads[i], &thread_retval[i]) < 0) {

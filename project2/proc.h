@@ -46,6 +46,8 @@ struct context {
   uint eip;
 };
 
+#define NTHREAD 32
+
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
@@ -68,9 +70,8 @@ struct proc {
   int thread_num;              // Number of threads
   int isthread;                // Indicate if this is thread (bool)
   thread_t tid;                // Thread ID
-  thread_t nexttid;            // Thread ID for next thread
   struct proc* mother;         // Creator of thread
-  struct proc* threads[NPROC]; // Threads
+  struct proc* threads[NTHREAD]; // Threads
   void *retval;
 };
 

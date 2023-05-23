@@ -6,11 +6,9 @@
 #include "x86.h"
 #include "proc.h"
 #include "spinlock.h"
-// #include "user.h"
-
-#define NTHREAD 32
 
 extern struct ptable_t ptable;
+extern struct proc *initproc;
 extern void wakeup1(void *chan);
 
 int thread_create(thread_t*, void*(*)(void*), void*);
@@ -18,24 +16,27 @@ int thread_join(thread_t, void**);
 int thread_start(struct proc*); 
 void thread_exit(void*);
 
+// Creates and update thread to tid(thread's id) having start_routine with arg.
+// Returns 0 for success, -1 for failure.
 int
 thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
 {
-  cprintf("start: %d\n", start_routine);
+  struct proc* lwp;                     // current(will be created) thread
+  struct proc* mother = myproc();       // process that called thread_create
 
-  // Allocate a new `proc` structure for the LWP
-  struct proc* lwp;
-  struct proc* mother = myproc();
-
+  // Allocate lwp and initiailize it
   if ((lwp = allocproc()) == 0) {
     return -1; // Failed to allocate a new LWP
   }
+  lwp->stackpage = 1;
+  lwp->isthread = 1;
 
-  // Share the same address space as the parent process
+  // Share the same address space and parent process as the mother process
   lwp->pgdir = mother->pgdir;
   lwp->mother = mother;
   lwp->parent = mother->parent;
 
+  // Allocate pages for lwp and update its mother's size as well
   if ((lwp->sz = mother->sz = allocuvm(lwp->pgdir, mother->sz, mother->sz + 2*PGSIZE)) == 0) {
     goto bad;
   }
@@ -43,13 +44,11 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   // Build stack guard
   clearpteu(lwp->pgdir, (char*)(lwp->sz - 2*PGSIZE));
 
-
-
   // Set up the LWP's stack
   uint sp = lwp->sz;
   uint ustack[2];
-  ustack[0] = (uint)arg;
-  ustack[1] = 0; // Placeholder for the return address
+  ustack[1] = (uint)arg;
+  ustack[0] = 0xffffffff; // Placeholder for the return address
 
   sp -= 2*sizeof(uint);
 
@@ -64,12 +63,22 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   lwp->tf->eip = (uint)start_routine;
   lwp->tf->eax = 0;
 
+  // Copy file descriptor from mother
+  for(int i=0;i<NOFILE;i++)
+    if(mother->ofile[i])
+      lwp->ofile[i]=filedup(mother->ofile[i]);
+  lwp->cwd=idup(mother->cwd);
+
+  // Copy name of mother process to thread
+  safestrcpy(lwp->name,mother->name,sizeof(mother->name));
+
   // Set the thread ID
   *thread = lwp->tid = ++(mother->thread_num);
 
-  // Add the LWP to the thread management data structure (e.g., array)
+  // Add the LWP to the mother's thread array
   mother->threads[lwp->tid] = lwp;
 
+  // Set sibling thread's size equal as current thread(lwp)
   for (int i = 1; i < NTHREAD; i++) {
     if (mother->threads[i]) {
       mother->threads[i]->sz = lwp->sz;
@@ -77,15 +86,10 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   }
 
   // Mark the LWP as runnable
-  
-  switchuvm(lwp);
-
   acquire(&ptable.lock);
+  lcr3(V2P(lwp->pgdir));  // switch to process's address space
   lwp->state = RUNNABLE;
   release(&ptable.lock);
-
-  cprintf("is this okay???? pid: %d, func: %d\n", lwp->pid, start_routine);
-  cprintf("%d's eip: %d\n", lwp->pid, lwp->tf->eip);
 
   return 0; // Thread creation successful
 
@@ -96,26 +100,26 @@ bad:
   return -1;
 }
 
+// Join given thread and lend retval from exited thread.
+// Returns 0 for success, -1 for failure.
 int thread_join(thread_t thread, void** retval) {
-  struct proc* p = myproc();
+  // Process that will wait for its threads
+  struct proc* curproc = myproc();
 
-  if (thread >= NTHREAD || p->threads[thread] == 0) {
+  acquire(&ptable.lock);
+  if (thread >= NTHREAD || curproc->threads[thread] == 0) {
+    release(&ptable.lock);
     return -1; // Invalid thread ID or thread does not exist
   }
 
-  struct proc* lwp = p->threads[thread];
-
-  acquire(&ptable.lock);
+  struct proc* lwp = curproc->threads[thread];
 
   // Wait for the LWP to complete
   while (lwp->state != ZOMBIE) {
-    sleep(lwp, &ptable.lock);
+    sleep(curproc, &ptable.lock);
   }
 
-  // Retrieve the LWP's return value
-  if (retval != 0) {
-    *retval = lwp->retval;
-  }
+  *retval = lwp->retval;
 
   // Clean up the LWP
   kfree(lwp->kstack);
@@ -127,36 +131,52 @@ int thread_join(thread_t thread, void** retval) {
   lwp->state = UNUSED;
 
   release(&ptable.lock);
-
   return 0; // Thread join successful
 }
 
-void thread_exit(void* retval) {
-  struct proc* p = myproc();
-  struct proc* parent = p->parent;
 
-  // Set the return value in the current LWP's proc structure
-  p->retval = retval;
+// Exit thread and set return value of thread to retval.
+// Never returns.
+void thread_exit(void* retval) {
+  struct proc* lwp = myproc();
+  struct proc* mother = lwp->mother;
+  int fd;
+
+  // Close all open files.
+  for(fd = 0; fd < NOFILE; fd++){
+    if(lwp->ofile[fd]){
+      fileclose(lwp->ofile[fd]);
+      lwp->ofile[fd] = 0;
+    }
+  }
+
+  // Release lwp's working directory
+  begin_op();
+  iput(lwp->cwd);
+  end_op();
+  lwp->cwd = 0;
 
   acquire(&ptable.lock);
 
-  // Wake up the parent thread waiting in thread_join
-  wakeup1(parent);
+  lwp->retval = retval;         // Set the return value in the current lwp
+  lwp->mother->thread_num--;    // Decrease number of thread of mother proc
 
-  // Clean up the LWP
-  kfree(p->kstack);
-  p->kstack = 0;
-  p->pid = 0;
-  p->parent = 0;
-  p->name[0] = 0;
-  p->killed = 0;
-  p->state = ZOMBIE;
+  // Wake up the mother proc waiting in thread_join
+  wakeup1(mother);
 
-  // Release the process table lock before jumping into the scheduler
-  release(&ptable.lock);
+  // Adopt abandoned processes
+  for(struct proc *p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->parent == lwp){
+      p->parent = initproc;
+      if(p->state == ZOMBIE)
+        wakeup1(initproc);
+    }
+  }
 
+  lwp->state = ZOMBIE;
+
+  // Keep holding ptable.lock before jumping into the scheduler
   // Jump into the scheduler, never to return
   sched();
-
-  // Note: The execution will never reach this point
+  panic("zombie exit");
 }
