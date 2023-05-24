@@ -168,6 +168,7 @@ void            timerinit(void);
 int             thread_create(thread_t*, void*(*)(void*), void*);
 int             thread_join(thread_t, void**);
 void            thread_exit(void*);
+int             clean_thread(struct proc*);
 
 // trap.c
 void            idtinit(void);

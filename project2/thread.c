@@ -13,8 +13,8 @@ extern void wakeup1(void *chan);
 
 int thread_create(thread_t*, void*(*)(void*), void*);
 int thread_join(thread_t, void**);
-int thread_start(struct proc*); 
 void thread_exit(void*);
+void _cleanup(struct proc*);
 
 // Creates and update thread to tid(thread's id) having start_routine with arg.
 // Returns 0 for success, -1 for failure.
@@ -122,13 +122,7 @@ int thread_join(thread_t thread, void** retval) {
   *retval = lwp->retval;
 
   // Clean up the LWP
-  kfree(lwp->kstack);
-  lwp->kstack = 0;
-  lwp->pid = 0;
-  lwp->parent = 0;
-  lwp->name[0] = 0;
-  lwp->killed = 0;
-  lwp->state = UNUSED;
+  _cleanup(lwp);
 
   release(&ptable.lock);
   return 0; // Thread join successful
@@ -179,4 +173,67 @@ void thread_exit(void* retval) {
   // Jump into the scheduler, never to return
   sched();
   panic("zombie exit");
+}
+
+// Cleanup function for internal use. 
+// Only works when victim != myproc()
+void
+_cleanup(struct proc *victim)
+{
+  if (victim->kstack)
+    kfree(victim->kstack);
+  victim->kstack = 0;
+  victim->pid = 0;
+  victim->parent = 0;
+  victim->mother = 0;
+  victim->name[0] = 0;
+  victim->killed = 0;
+  victim->tf = 0;
+  victim->sz = 0;
+  victim->state = UNUSED;
+}
+
+// Clean all sibling thread except self. 
+// If there's mother thread, cleanup as well.
+int
+clean_thread(struct proc* curproc)
+{
+  // /*
+  struct proc *mother;
+  struct proc *sibling;
+  int threadnum;
+
+  acquire(&ptable.lock);
+  mother = (curproc->isthread) ? curproc->mother : curproc;
+  threadnum = mother->thread_num;
+
+  // Cleanup siblings
+  for (int i = 1; i < NTHREAD; i++) {
+    sibling = mother->threads[i];
+
+    if (!threadnum)
+      break;          // No more needs for cleaning up thread
+
+    if (!sibling) 
+      continue;
+
+    if (sibling == curproc) {
+      threadnum--;    // Decrese threadnum even for current thread
+      continue;
+    }
+    
+    // found scapegoat sibling
+    _cleanup(sibling);
+    sibling = 0;
+  }
+
+  // If current process is not mother process, then cleanup mother as well
+  if (curproc != mother) {
+    curproc->parent = mother->parent;
+    curproc->mother = 0;
+    _cleanup(mother);
+  }
+
+  release(&ptable.lock);
+  return 0;
 }

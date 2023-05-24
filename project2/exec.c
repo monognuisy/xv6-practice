@@ -27,6 +27,9 @@ exec2(char *path, char **argv, int stacksize)
   pde_t *pgdir, *oldpgdir;
   struct proc *curproc = myproc();
 
+  // Cleanup sibling & mother thread
+  clean_thread(curproc);
+
   begin_op();
 
   if((ip = namei(path)) == 0){
@@ -67,6 +70,8 @@ exec2(char *path, char **argv, int stacksize)
   iunlockput(ip);
   end_op();
   ip = 0;
+
+
 
   // Check if stacksize exceeds memory limit.
   // If limit is 0, then there's no limit.

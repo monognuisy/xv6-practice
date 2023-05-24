@@ -184,6 +184,8 @@ UPROGS=\
 	_zombie\
 	_pmanager\
 	_thread_test\
+	_thread_exec\
+	_hellodemo\
 
 fs.img: mkfs README $(UPROGS)
 	./mkfs fs.img README $(UPROGS)
@@ -254,7 +256,8 @@ EXTRA=\
 	mkfs.c ulib.c user.h cat.c echo.c forktest.c grep.c kill.c\
 	ln.c ls.c mkdir.c rm.c stressfs.c usertests.c wc.c zombie.c\
 	printf.c umalloc.c\
-	pmanager.c thread_test.c\
+	pmanager.c thread_test.c thread_exec.c\
+	hellodemo.c\
 	README dot-bochsrc *.pl toc.* runoff runoff1 runoff.list\
 	.gdbinit.tmpl gdbutil\
 
