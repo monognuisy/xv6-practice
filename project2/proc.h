@@ -50,6 +50,11 @@ struct context {
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+struct ttable_t {
+  struct spinlock lock;
+  struct proc* threads[NTHREAD];
+};
+
 // Per-process state
 struct proc {
   uint sz;                     // Size of process memory (bytes)

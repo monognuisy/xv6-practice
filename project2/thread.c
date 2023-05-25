@@ -102,7 +102,9 @@ bad:
 
 // Join given thread and lend retval from exited thread.
 // Returns 0 for success, -1 for failure.
-int thread_join(thread_t thread, void** retval) {
+int 
+thread_join(thread_t thread, void** retval) 
+{
   // Process that will wait for its threads
   struct proc* curproc = myproc();
 
@@ -122,7 +124,9 @@ int thread_join(thread_t thread, void** retval) {
   *retval = lwp->retval;
 
   // Clean up the LWP
+  lwp->mother->threads[lwp->tid] = 0;
   _cleanup(lwp);
+
 
   release(&ptable.lock);
   return 0; // Thread join successful
@@ -180,6 +184,8 @@ void thread_exit(void* retval) {
 void
 _cleanup(struct proc *victim)
 {
+  if (!victim) return;
+
   if (victim->kstack)
     kfree(victim->kstack);
   victim->kstack = 0;
@@ -198,33 +204,31 @@ _cleanup(struct proc *victim)
 int
 clean_thread(struct proc* curproc)
 {
-  // /*
+  acquire(&ptable.lock);
   struct proc *mother;
   struct proc *sibling;
-  int threadnum;
 
-  acquire(&ptable.lock);
   mother = (curproc->isthread) ? curproc->mother : curproc;
-  threadnum = mother->thread_num;
 
   // Cleanup siblings
   for (int i = 1; i < NTHREAD; i++) {
     sibling = mother->threads[i];
 
-    if (!threadnum)
+    if (mother->thread_num == 0)
       break;          // No more needs for cleaning up thread
 
     if (!sibling) 
       continue;
 
     if (sibling == curproc) {
-      threadnum--;    // Decrese threadnum even for current thread
+      mother->thread_num--;    // Decrese threadnum even for current thread
       continue;
     }
-    
+
     // found scapegoat sibling
     _cleanup(sibling);
-    sibling = 0;
+    mother->threads[i] = 0;
+    mother->thread_num--;
   }
 
   // If current process is not mother process, then cleanup mother as well

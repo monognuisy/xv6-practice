@@ -71,8 +71,6 @@ exec2(char *path, char **argv, int stacksize)
   end_op();
   ip = 0;
 
-
-
   // Check if stacksize exceeds memory limit.
   // If limit is 0, then there's no limit.
   if (curproc->limit && NEWSIZEINBYTES(stacksize) > curproc->limit) 
@@ -119,6 +117,10 @@ exec2(char *path, char **argv, int stacksize)
   curproc->sz = sz;
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
+
+  curproc->isthread = 0;
+  curproc->mother = 0;
+  curproc->tid = 0;
   
   // update current stacksize
   curproc->stackpage = stacksize;

@@ -251,6 +251,8 @@ exit(void)
     }
   }
 
+  clean_thread(curproc);
+
   begin_op();
   iput(curproc->cwd);
   end_op();
