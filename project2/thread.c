@@ -73,13 +73,14 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   safestrcpy(lwp->name,mother->name,sizeof(mother->name));
 
   // Set the thread ID
-  *thread = lwp->tid = ++(mother->thread_num);
+  *thread = lwp->tid = (mother->nexttid++);
+  mother->thread_num++;
 
   // Add the LWP to the mother's thread array
   mother->threads[lwp->tid] = lwp;
 
   // Set sibling thread's size equal as current thread(lwp)
-  for (int i = 1; i < NTHREAD; i++) {
+  for (int i = 0; i < NTHREAD; i++) {
     if (mother->threads[i]) {
       mother->threads[i]->sz = lwp->sz;
     }
@@ -211,7 +212,7 @@ clean_thread(struct proc* curproc)
   mother = (curproc->isthread) ? curproc->mother : curproc;
 
   // Cleanup siblings
-  for (int i = 1; i < NTHREAD; i++) {
+  for (int i = 0; i < NTHREAD; i++) {
     sibling = mother->threads[i];
 
     if (mother->thread_num == 0)

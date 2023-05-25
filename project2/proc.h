@@ -75,6 +75,7 @@ struct proc {
   int thread_num;              // Number of threads
   int isthread;                // Indicate if this is thread (bool)
   thread_t tid;                // Thread ID
+  thread_t nexttid;            // Next thread's ID
   struct proc* mother;         // Creator of thread
   struct proc* threads[NTHREAD]; // Threads
   void *retval;

@@ -97,6 +97,7 @@ found:
   p->thread_num = 0;
   p->isthread = 0;
   p->tid = 0;
+  p->nexttid = 0;
 
   release(&ptable.lock);
 
