@@ -170,6 +170,11 @@ growproc(int n)
 {
   uint sz;
   struct proc *curproc = myproc();
+  struct proc *mother;
+  int tnum;
+
+  // lock ptable for modifying procs' fields
+  acquire(&ptable.lock);
 
   sz = curproc->sz;
   if(n > 0){
@@ -179,7 +184,25 @@ growproc(int n)
     if((sz = deallocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
   }
-  curproc->sz = sz;
+  
+  // Grow size of mother & sibling.
+
+  mother = (curproc->isthread) ? curproc->mother : curproc;
+  mother->sz = sz;
+
+  // for faster loop
+  tnum = mother->thread_num;
+  for (int i = 0; i < NTHREAD; i++) {
+    if (tnum == 0) break;
+
+    if (mother->threads[i]) {
+      mother->threads[i]->sz = sz;
+      tnum--;
+    }
+  }
+
+  release(&ptable.lock);
+
   switchuvm(curproc);
   return 0;
 }

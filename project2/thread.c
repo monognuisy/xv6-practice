@@ -73,7 +73,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   safestrcpy(lwp->name,mother->name,sizeof(mother->name));
 
   // Set the thread ID
-  *thread = lwp->tid = (mother->nexttid++);
+  *thread = lwp->tid = (mother->nexttid++) % NPROC;
   mother->thread_num++;
 
   // Add the LWP to the mother's thread array
@@ -193,6 +193,8 @@ _cleanup(struct proc *victim)
   victim->pid = 0;
   victim->parent = 0;
   victim->mother = 0;
+  victim->isthread = 0;
+  victim->tid = 0;
   victim->name[0] = 0;
   victim->killed = 0;
   victim->tf = 0;
