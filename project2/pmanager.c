@@ -94,9 +94,9 @@ parserun(char *buf)
 
     argv[0] = path;
 
-    // parent
-    if ((pid = fork())) {
-      wait();
+    // parent -> no wait.
+    if ((pid = fork()) != 0) {
+      // wait();
       return 0;
     }
 

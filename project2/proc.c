@@ -597,8 +597,10 @@ listproc(void)
 {
   struct proc *p;
 
-  cprintf("procname \tpid \tstack \tmemory \tmemlimit\n");
+  cprintf("proc \tpid \tstack \tmemory \tmemlimit\n");
   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if (p->isthread || p->stackpage == 0) continue;
+
     if (p->state == RUNNING || p->state == RUNNABLE || p->state == SLEEPING) {
       cprintf("%s \t%d \t%d \t%d \t%d\n", p->name, p->pid, p->stackpage, p->sz, p->limit);
     }
