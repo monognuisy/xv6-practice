@@ -35,6 +35,13 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   lwp->pgdir = mother->pgdir;
   lwp->mother = mother;
   lwp->parent = mother->parent;
+  lwp->limit = mother->limit;
+
+  // Check if new size exceed memory limit
+  if (mother->limit && mother->sz + 2*PGSIZE > mother->limit) {
+    cprintf("thread create error: memory limit exceeded!\n");
+    goto bad;
+  }
 
   // Allocate pages for lwp and update its mother's size as well
   if ((lwp->sz = mother->sz = allocuvm(lwp->pgdir, mother->sz, mother->sz + 2*PGSIZE)) == 0) {

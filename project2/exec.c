@@ -77,8 +77,10 @@ exec2(char *path, char **argv, int stacksize)
 
   // Check if stacksize exceeds memory limit.
   // If limit is 0, then there's no limit.
-  if (curproc->limit && sz + NEWSIZEINBYTES(stacksize) > curproc->limit) 
+  if (curproc->limit && sz + NEWSIZEINBYTES(stacksize) > curproc->limit) {
+    cprintf("exec error: memory limit exceeded!\n");
     goto bad;
+  }
 
   // Allocate two pages at the next page boundary.
   // Make the first inaccessible.  Use the second as the user stack.

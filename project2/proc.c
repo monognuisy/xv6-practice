@@ -173,11 +173,16 @@ growproc(int n)
   struct proc *mother;
   int tnum;
 
-  // lock ptable for modifying procs' fields
+  // Lock ptable for modifying procs' fields
   acquire(&ptable.lock);
 
   sz = curproc->sz;
   if(n > 0){
+    // Check if newsize exceed memory limit
+    if (curproc->limit && sz + n > curproc->limit) {
+      cprintf("sbrk error: memory limit exceeded!\n");
+      return -1;
+    }
     if((sz = allocuvm(curproc->pgdir, sz, sz + n)) == 0)
       return -1;
   } else if(n < 0){
