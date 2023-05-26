@@ -71,9 +71,13 @@ exec2(char *path, char **argv, int stacksize)
   end_op();
   ip = 0;
 
+  // Check range of stacksize
+  if (stacksize < 1 || stacksize > 100) 
+    goto bad;
+
   // Check if stacksize exceeds memory limit.
   // If limit is 0, then there's no limit.
-  if (curproc->limit && NEWSIZEINBYTES(stacksize) > curproc->limit) 
+  if (curproc->limit && sz + NEWSIZEINBYTES(stacksize) > curproc->limit) 
     goto bad;
 
   // Allocate two pages at the next page boundary.
