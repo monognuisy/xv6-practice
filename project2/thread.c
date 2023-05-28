@@ -36,6 +36,7 @@ thread_create(thread_t *thread, void *(*start_routine)(void *), void *arg)
   lwp->mother = mother;
   lwp->parent = mother->parent;
   lwp->limit = mother->limit;
+  lwp->pid = mother->pid;
 
   // Check if new size exceed memory limit
   if (mother->limit && mother->sz + 2*PGSIZE > mother->limit) {

@@ -16,16 +16,6 @@ struct cpu {
 extern struct cpu cpus[NCPU];
 extern int ncpu;
 
-// struct thread {
-//   int id;                          // thread id
-//   void *(*func)(void *);           // function executed by thread
-//   void *sp;                        // stack pointer
-//   void *stack;                     // thread stack
-//   void *args;                      // argument for tfunction
-// };
-
-// typedef struct thread* thread_t;
-
 
 //PAGEBREAK: 17
 // Saved registers for kernel context switches.
@@ -50,11 +40,6 @@ struct context {
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
-struct ttable_t {
-  struct spinlock lock;
-  struct proc* threads[NTHREAD];
-};
-
 // Per-process state
 struct proc {
   uint sz;                     // Size of process memory (bytes)
@@ -77,8 +62,8 @@ struct proc {
   thread_t tid;                // Thread ID
   thread_t nexttid;            // Next thread's ID
   struct proc* mother;         // Creator of thread
-  struct proc* threads[NTHREAD]; // Threads
-  void *retval;
+  struct proc* threads[NTHREAD]; // Child threads
+  void *retval;                // Return value of thread
 };
 
 struct ptable_t {

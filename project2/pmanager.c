@@ -123,6 +123,7 @@ parserun(char *buf)
 
     int status = setmemorylimit(pid, limit);
     if (status) printf(1, "setmemorylimit failed\n");
+    else printf(1, "setmemorylimit succeeded\n");
 
     return status;
   }

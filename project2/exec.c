@@ -124,6 +124,7 @@ exec2(char *path, char **argv, int stacksize)
   curproc->tf->eip = elf.entry;  // main
   curproc->tf->esp = sp;
 
+  // Reset thread-releated fields.
   curproc->isthread = 0;
   curproc->mother = 0;
   curproc->tid = 0;
