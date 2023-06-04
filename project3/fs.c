@@ -373,8 +373,8 @@ static uint
 bmap(struct inode *ip, uint bn)
 {
 
-  uint addr, *a, *b;
-  struct buf *bp, *bp2;
+  uint addr, *a;
+  struct buf *bp;
 
   if(bn < NDIRECT){
     if((addr = ip->addrs[bn]) == 0)
@@ -383,6 +383,7 @@ bmap(struct inode *ip, uint bn)
   }
   bn -= NDIRECT;
 
+  // Single indirect blocks
   if(bn < NINDIRECT){
     // Load indirect block, allocating if necessary.
     if((addr = ip->addrs[NDIRECT]) == 0)
@@ -398,6 +399,7 @@ bmap(struct inode *ip, uint bn)
   }
   bn -= NINDIRECT;
 
+  // Double indirect blocks
   if(bn < DINDIRECT){
     // Load double indirect block, allocating if necessary.
     if((addr = ip->addrs[NDIRECT+1]) == 0)
@@ -414,21 +416,65 @@ bmap(struct inode *ip, uint bn)
       a[indirect_blockidx] = addr = balloc(ip->dev);
       log_write(bp);
     }
+    brelse(bp);
 
     // for inside blocks
-    bp2 = bread(ip->dev, addr);
-    b = (uint*)bp2->data;
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
 
-    if ((addr = b[inside_blockidx]) == 0) {
-      b[inside_blockidx] = addr = balloc(ip->dev);
-      log_write(bp2);
+    if ((addr = a[inside_blockidx]) == 0) {
+      a[inside_blockidx] = addr = balloc(ip->dev);
+      log_write(bp);
     }
 
-    brelse(bp2);
     brelse(bp);
     return addr;
   }
+  bn -= DINDIRECT;
 
+  // Triple indirect block
+  if(bn < TINDIRECT){
+    // Load double indirect block, allocating if necessary.
+    if((addr = ip->addrs[NDIRECT+2]) == 0)
+      ip->addrs[NDIRECT+2] = addr = balloc(ip->dev);
+
+    // for 1st layer blocks
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+
+    uint outer_index = bn / DINDIRECT;
+    uint outer_offset = bn % DINDIRECT;
+
+    if ((addr = a[outer_index]) == 0) {
+      a[outer_index] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+
+    // for 2nd layer blocks
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+
+    uint inner_index = outer_offset / NINDIRECT;
+    uint inner_offset = outer_offset % NINDIRECT;
+
+    if ((addr = a[inner_index]) == 0) {
+      a[inner_index] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+
+    // for 3rd layer blocks
+    bp = bread(ip->dev, addr);
+    a = (uint*)bp->data;
+
+    if ((addr = a[inner_offset]) == 0) {
+      a[inner_offset] = addr = balloc(ip->dev);
+      log_write(bp);
+    }
+    brelse(bp);
+    return addr;
+  }
   panic("bmap: out of range");
 }
 
@@ -437,13 +483,14 @@ bmap(struct inode *ip, uint bn)
 // to it (no directory entries referring to it)
 // and has no in-memory reference to it (is
 // not an open file or current directory).
+/*
 static void
 itrunc(struct inode *ip)
 {
 
-  int i, j;
-  struct buf *bp, *bp2;
-  uint *a, *b;
+  int i, j, k;
+  struct buf *bp, *bp2, *bp3;
+  uint *a, *b, *c;
 
   for(i = 0; i < NDIRECT; i++){
     if(ip->addrs[i]){
@@ -484,12 +531,149 @@ itrunc(struct inode *ip)
         }
         brelse(bp2);
         bfree(ip->dev, a[i]);
+        a[i] = 0;
       }
     }
 
     brelse(bp);
     bfree(ip->dev, ip->addrs[NDIRECT + 1]);
     ip->addrs[NDIRECT + 1] = 0;
+  }
+
+  // Cleanup triple indirect blocks
+  if (ip->addrs[NDIRECT + 2]) {
+    bp = bread(ip->dev, ip->addrs[NDIRECT + 2]);
+    a = (uint*)bp->data;
+
+    for (i = 0; i < NINDIRECT; i++) {
+      if (a[i]) {
+        bp2 = bread(ip->dev, a[i]);
+        b = (uint*)bp2->data;
+
+        for (j = 0; j < NINDIRECT; j++) {
+          if (b[j]) {
+            bp3 = bread(ip->dev, b[j]);
+            c = (uint*)bp3->data;
+
+            for (k = 0; k < NINDIRECT; k++) {
+              if (c[k]) {
+                bfree(ip->dev, c[k]);
+                c[k] = 0;
+              }  
+            }
+
+            brelse(bp3);
+            bfree(ip->dev, b[j]);
+            b[j] = 0;
+          }
+        }
+
+        brelse(bp2);
+        bfree(ip->dev, a[i]);
+        a[i] = 0;
+      } 
+    }
+    brelse(bp);
+    bfree(ip->dev, ip->addrs[NDIRECT + 2]);
+    ip->addrs[NDIRECT + 2] = 0;
+  }
+
+  ip->size = 0;
+  iupdate(ip);
+}
+*/
+
+static void
+itrunc(struct inode *ip)
+{
+  int i, j, k;
+  struct buf *bp, *bp2, *bp3;
+  uint *a, *b, *c;
+
+  for (i = 0; i < NDIRECT; i++) {
+    if (ip->addrs[i]) {
+      bfree(ip->dev, ip->addrs[i]);
+      ip->addrs[i] = 0;
+    }
+  }
+
+  // Cleanup single indirect blocks
+  if (ip->addrs[NDIRECT]) {
+    bp = bread(ip->dev, ip->addrs[NDIRECT]);
+    a = (uint*)bp->data;
+    for (i = 0; i < NINDIRECT; i++) {
+      if (a[i]) {
+        bfree(ip->dev, a[i]);
+        a[i] = 0;
+      }
+    }
+    brelse(bp);
+    bfree(ip->dev, ip->addrs[NDIRECT]);
+    ip->addrs[NDIRECT] = 0;
+  }
+
+  // Cleanup double indirect blocks
+  if (ip->addrs[NDIRECT + 1]) {
+    bp = bread(ip->dev, ip->addrs[NDIRECT + 1]);
+    a = (uint*)bp->data;
+
+    for (i = 0; i < NINDIRECT; i++) {
+      if (a[i]) {
+        bp2 = bread(ip->dev, a[i]);
+        b = (uint*)bp2->data;
+        for (j = 0; j < NINDIRECT; j++) {
+          if (b[j]) {
+            bfree(ip->dev, b[j]);
+            b[j] = 0;
+          }
+        }
+        brelse(bp2);
+        bfree(ip->dev, a[i]);
+        a[i] = 0;
+      }
+    }
+
+    brelse(bp);
+    bfree(ip->dev, ip->addrs[NDIRECT + 1]);
+    ip->addrs[NDIRECT + 1] = 0;
+  }
+
+  // Cleanup triple indirect blocks
+  if (ip->addrs[NDIRECT + 2]) {
+    bp = bread(ip->dev, ip->addrs[NDIRECT + 2]);
+    a = (uint*)bp->data;
+
+    for (i = 0; i < NINDIRECT; i++) {
+      if (a[i]) {
+        bp2 = bread(ip->dev, a[i]);
+        b = (uint*)bp2->data;
+
+        for (j = 0; j < NINDIRECT; j++) {
+          if (b[j]) {
+            bp3 = bread(ip->dev, b[j]);
+            c = (uint*)bp3->data;
+
+            for (k = 0; k < NINDIRECT; k++) {
+              if (c[k]) {
+                bfree(ip->dev, c[k]);
+                c[k] = 0;
+              }
+            }
+
+            brelse(bp3);
+            bfree(ip->dev, b[j]);
+            b[j] = 0;
+          }
+        }
+
+        brelse(bp2);
+        bfree(ip->dev, a[i]);
+        a[i] = 0;
+      }
+    }
+    brelse(bp);
+    bfree(ip->dev, ip->addrs[NDIRECT + 2]);
+    ip->addrs[NDIRECT + 2] = 0;
   }
 
   ip->size = 0;
