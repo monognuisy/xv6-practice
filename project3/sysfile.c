@@ -253,6 +253,8 @@ create(char *path, short type, short major, short minor)
     ilock(ip);
     if(type == T_FILE && ip->type == T_FILE)
       return ip;
+    if (type == T_SYMLINK)
+      return ip;
     iunlockput(ip);
     return 0;
   }
@@ -449,44 +451,30 @@ sys_pipe(void)
   return 0;
 }
 
-// Make symbolic linked file. 
+// Make symbolic linked file.
 int
 sys_symlink(void)
 {
   char *oldpath, *newpath;
-  struct file *f;
   struct inode *ip;
 
-  if (argstr(0, &oldpath) < 0 || argstr(0, &newpath)) {
+  if (argstr(0, &oldpath) < 0 || argstr(1, &newpath) < 0) {
     return -1;
   }
 
-  // touch file
   begin_op();
-  ip = create(newpath, T_FILE, 0, 0);
+
+  ip = create(newpath, T_SYMLINK, 0, 0);
   if (ip == 0) {
     end_op();
     return -1;
   }
-  
-  // make newfile as symlink
-  ip->isSymlink = 1;
-  ip->repath = oldpath;
 
-  if ((f = filealloc()) == 0) {
-    fileclose(f);
-    end_op();
-    return -1;
-  }
+  ip->repath = oldpath;
+  iupdate(ip);
+  iunlockput(ip);
 
   end_op();
-  
-  // make newfile as symlink
-  f->type = FD_INODE;
-  f->ip = ip;
-  f->off = 0;
-  f->readable = 1;
-  f->writable = 1;
-
   return 0;
 }
+

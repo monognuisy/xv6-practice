@@ -2,10 +2,8 @@ struct file {
   enum { FD_NONE, 
          FD_PIPE, 
          FD_INODE, 
-         FD_SYMLINK
   } type;
   int ref;              // reference count
-  char *repath;         // redirection path for symlink
   char readable;
   char writable;
   struct pipe *pipe;
