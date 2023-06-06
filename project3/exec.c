@@ -1,11 +1,16 @@
 #include "types.h"
 #include "param.h"
+#include "stat.h"
 #include "memlayout.h"
 #include "mmu.h"
 #include "proc.h"
 #include "defs.h"
 #include "x86.h"
 #include "elf.h"
+#include "spinlock.h"
+#include "sleeplock.h"
+#include "fs.h"
+#include "file.h"
 
 int
 exec(char *path, char **argv)
@@ -27,6 +32,20 @@ exec(char *path, char **argv)
     return -1;
   }
   ilock(ip);
+
+  // for symbolic link
+  if (ip->type == T_SYMLINK) {
+    path = ip->repath;
+
+    iunlockput(ip);
+    if ((ip = namei(path)) == 0) {
+      end_op();
+      cprintf("exec: fail\n");
+      return -1;
+    }
+    ilock(ip);
+  }
+
   pgdir = 0;
 
   // Check ELF header

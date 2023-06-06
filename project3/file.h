@@ -12,6 +12,9 @@ struct file {
 };
 
 
+// #include "sleeplock.h"
+#define MAXPATH 50
+
 // in-memory copy of an inode
 struct inode {
   uint dev;           // Device number
@@ -20,7 +23,7 @@ struct inode {
   struct sleeplock lock; // protects everything below here
   int valid;          // inode has been read from disk?
   int isSymlink;      // is this symbolic link?
-  char *repath;       // redirection path for symlink
+  char repath[MAXPATH];       // redirection path for symlink
 
   short type;         // copy of disk inode
   short major;

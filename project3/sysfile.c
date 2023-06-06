@@ -297,7 +297,7 @@ sys_open(void)
 
   begin_op();
 
-openstart: 
+// openstart: 
   if(omode & O_CREATE){
     ip = create(path, T_FILE, 0, 0);
     if(ip == 0){
@@ -310,16 +310,25 @@ openstart:
       return -1;
     }
     ilock(ip);
-    if(ip->type == T_DIR && omode != O_RDONLY){
+    if(ip->type == T_DIR && !(omode == O_RDONLY || omode == O_LOOKUP)){
       iunlockput(ip);
       end_op();
       return -1;
     }
   }
 
-  if (ip->isSymlink && ip->repath) {
+  // cprintf("omode: %d\n", !(omode & O_LOOKUP));
+
+  // for symbolic link file
+  if (ip->type == T_SYMLINK && !(omode & O_LOOKUP)) {
     path = ip->repath;
-    goto openstart;
+
+    iunlockput(ip);
+    if ((ip = namei(path)) == 0) {
+      end_op();
+      return -1;
+    }
+    ilock(ip);
   }
 
   if((f = filealloc()) == 0 || (fd = fdalloc(f)) < 0){
@@ -462,6 +471,8 @@ sys_symlink(void)
     return -1;
   }
 
+  cprintf("%s, %s\n", oldpath, newpath);
+
   begin_op();
 
   ip = create(newpath, T_SYMLINK, 0, 0);
@@ -470,7 +481,7 @@ sys_symlink(void)
     return -1;
   }
 
-  ip->repath = oldpath;
+  safestrcpy(ip->repath, oldpath, MAXPATH);
   iupdate(ip);
   iunlockput(ip);
 
