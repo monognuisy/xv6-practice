@@ -317,8 +317,6 @@ sys_open(void)
     }
   }
 
-  // cprintf("omode: %d\n", !(omode & O_LOOKUP));
-
   // for symbolic link file
   if (ip->type == T_SYMLINK && !(omode & O_LOOKUP)) {
     path = ip->repath;
@@ -470,8 +468,6 @@ sys_symlink(void)
   if (argstr(0, &oldpath) < 0 || argstr(1, &newpath) < 0) {
     return -1;
   }
-
-  cprintf("%s, %s\n", oldpath, newpath);
 
   begin_op();
 
