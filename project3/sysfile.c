@@ -485,3 +485,8 @@ sys_symlink(void)
   return 0;
 }
 
+int
+sys_sync(void)
+{
+  return sync(); 
+}

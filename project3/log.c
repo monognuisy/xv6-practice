@@ -131,6 +131,7 @@ begin_op(void)
       sleep(&log, &log.lock);
     } else if(log.lh.n + (log.outstanding+1)*MAXOPBLOCKS > LOGSIZE){
       // this op might exhaust log space; wait for commit.
+      sync();
       sleep(&log, &log.lock);
     } else {
       log.outstanding += 1;
@@ -160,17 +161,43 @@ end_op(void)
     // the amount of reserved space.
     wakeup(&log);
   }
+
   release(&log.lock);
 
   if(do_commit){
     // call commit w/o holding locks, since not allowed
     // to sleep with locks.
-    commit();
+    // commit();
     acquire(&log.lock);
     log.committing = 0;
     wakeup(&log);
     release(&log.lock);
   }
+}
+
+// Commits all dirty bits in buffer
+int
+sync(void)
+{
+  cprintf("is aidsnfioandsfon?\n");
+  int blocksz = log.lh.n;
+
+  if (blocksz == 0) {
+    return -1;
+  }
+
+  log.committing = 1;
+
+  // call commit w/o holding locks, since not allowed
+  // to sleep with locks.
+  commit();
+  acquire(&log.lock);
+  log.committing = 0;
+  log.outstanding = 0;
+  // wakeup(&log);
+  release(&log.lock);
+
+  return blocksz;
 }
 
 // Copy modified blocks from cache to log.
