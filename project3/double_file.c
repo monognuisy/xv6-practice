@@ -6,7 +6,7 @@
 #define BSIZE 512
 #define NINDIRECT (BSIZE / sizeof(uint))
 #define NDBLINDIRECT ((NINDIRECT) * (NINDIRECT))
-#define NUM_BYTES (6 * 1024 * 1024)
+#define NUM_BYTES (8 * 1024 * 1024)
 
 #define NUM_TEST3 10
 

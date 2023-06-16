@@ -131,7 +131,7 @@ begin_op(void)
       sleep(&log, &log.lock);
     } else if(log.lh.n + (log.outstanding+1)*MAXOPBLOCKS > LOGSIZE){
       // this op might exhaust log space; wait for commit.
-      sync();
+      // sync();
       sleep(&log, &log.lock);
     } else {
       log.outstanding += 1;
@@ -167,7 +167,7 @@ end_op(void)
   if(do_commit){
     // call commit w/o holding locks, since not allowed
     // to sleep with locks.
-    // commit();
+    commit();
     acquire(&log.lock);
     log.committing = 0;
     wakeup(&log);
@@ -179,7 +179,6 @@ end_op(void)
 int
 sync(void)
 {
-  cprintf("is aidsnfioandsfon?\n");
   int blocksz = log.lh.n;
 
   if (blocksz == 0) {
